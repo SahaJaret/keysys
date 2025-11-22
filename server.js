@@ -41,14 +41,13 @@ const BASE_URL = getServerUrl();
 console.log("🌐 Server URL:", BASE_URL);
 
 // ===================== MONGODB CONNECTION =====================
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://sahajaret_db_user:M7aayGpyV8g86J6q@cluster0.imymvgf.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://sahajaret_db_user:M7aayGpyV8g86J6q@cluster0.imymvgf.mongodb.net/key_management?retryWrites=true&w=majority";
 
-// MongoDB client options for compatibility
+// MongoDB client options for Node.js 20+ compatibility
 const mongoOptions = {
-  tls: true,
-  tlsAllowInvalidCertificates: false,
   serverSelectionTimeoutMS: 30000,
   socketTimeoutMS: 45000,
+  family: 4, // Force IPv4
 };
 
 const client = new MongoClient(MONGODB_URI, mongoOptions);

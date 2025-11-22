@@ -2,11 +2,14 @@
   "name": "key-management-system",
   "version": "1.0.0",
   "description": "Key Management System with MongoDB",
-  "main": "server (2).js",
+  "main": "server.js",
   "type": "module",
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
-    "start": "node server\\ \\(2\\).js",
-    "dev": "node --watch server\\ \\(2\\).js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
   "keywords": [
     "key-management",
