@@ -62,6 +62,7 @@ let checkpointsCollection;
 let monetizationProvidersCollection;
 let scriptsCollection;
 let settingsCollection;
+let geoStatsCollection;
 
 async function connectDB() {
   try {
@@ -76,6 +77,7 @@ async function connectDB() {
     monetizationProvidersCollection = db.collection("monetization_providers");
     scriptsCollection = db.collection("scripts");
     settingsCollection = db.collection("settings");
+    geoStatsCollection = db.collection("geo_stats");
     
     // Initialize settings if not exist
     const existingSettings = await settingsCollection.findOne({ _id: "global" });
@@ -2669,6 +2671,133 @@ async function renderSettingsPage(pass) {
   `;
 }
 
+// ===================== ANALYTICS PAGE =====================
+async function renderAnalyticsPage(pass) {
+  // Get geo stats
+  const geoStats = await geoStatsCollection.find().sort({ totalRequests: -1 }).toArray();
+  
+  // Calculate totals
+  const totalRequests = geoStats.reduce((sum, stat) => sum + stat.totalRequests, 0);
+  const totalCountries = geoStats.length;
+  
+  // Top 10 countries
+  const topCountries = geoStats.slice(0, 10);
+  
+  return `
+    <header class="glass border-b border-slate-800/50 px-6 py-5 sticky top-0 z-10">
+      <div>
+        <h1 class="text-2xl font-bold mb-1">🌍 Analytics & Geolocation</h1>
+        <p class="text-sm text-slate-400">Global user statistics</p>
+      </div>
+    </header>
+
+    <div class="p-6 space-y-6">
+      <!-- Summary Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="glass rounded-xl p-6 border border-blue-500/20">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-slate-400">Total Requests</h3>
+            <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+          </div>
+          <p class="text-3xl font-bold text-white">${totalRequests.toLocaleString()}</p>
+          <p class="text-xs text-slate-500 mt-1">All-time checks</p>
+        </div>
+
+        <div class="glass rounded-xl p-6 border border-emerald-500/20">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-slate-400">Countries</h3>
+            <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <p class="text-3xl font-bold text-white">${totalCountries}</p>
+          <p class="text-xs text-slate-500 mt-1">Unique countries</p>
+        </div>
+
+        <div class="glass rounded-xl p-6 border border-purple-500/20">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-medium text-slate-400">Top Country</h3>
+            <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/>
+            </svg>
+          </div>
+          <p class="text-3xl font-bold text-white">${topCountries[0]?.countryCode || 'N/A'}</p>
+          <p class="text-xs text-slate-500 mt-1">${topCountries[0]?.country || 'No data'} - ${topCountries[0]?.totalRequests || 0} requests</p>
+        </div>
+      </div>
+
+      <!-- Top Countries Table -->
+      <div class="glass rounded-xl p-6">
+        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
+          <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+          Top 10 Countries
+        </h2>
+        
+        <div class="space-y-3">
+          ${topCountries.map((stat, index) => {
+            const percentage = ((stat.totalRequests / totalRequests) * 100).toFixed(1);
+            const flagEmoji = stat.countryCode === 'US' ? '🇺🇸' : 
+                            stat.countryCode === 'BR' ? '🇧🇷' :
+                            stat.countryCode === 'RU' ? '🇷🇺' :
+                            stat.countryCode === 'PH' ? '🇵🇭' :
+                            stat.countryCode === 'DE' ? '🇩🇪' :
+                            stat.countryCode === 'GB' ? '🇬🇧' :
+                            stat.countryCode === 'CA' ? '🇨🇦' :
+                            stat.countryCode === 'FR' ? '🇫🇷' :
+                            stat.countryCode === 'IN' ? '🇮🇳' :
+                            stat.countryCode === 'CN' ? '🇨🇳' : '🌍';
+            
+            return `
+              <div class="glass rounded-lg p-4 hover:border-blue-500/30 transition-all">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-3">
+                    <span class="text-2xl">${flagEmoji}</span>
+                    <div>
+                      <p class="font-semibold text-white">${stat.country}</p>
+                      <p class="text-xs text-slate-500">${stat.countryCode}</p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <p class="text-lg font-bold text-blue-400">${stat.totalRequests.toLocaleString()}</p>
+                    <p class="text-xs text-slate-500">${percentage}%</p>
+                  </div>
+                </div>
+                
+                <!-- Progress Bar -->
+                <div class="h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-blue-500 to-purple-500" style="width: ${percentage}%"></div>
+                </div>
+                
+                ${stat.actions ? `
+                  <div class="mt-3 flex gap-3 text-xs">
+                    <span class="text-slate-400">Checks: <span class="text-emerald-400">${stat.actions.check || 0}</span></span>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+
+      ${geoStats.length === 0 ? `
+        <div class="glass rounded-xl p-12 text-center">
+          <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center">
+            <svg class="w-10 h-10 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold mb-2 text-slate-300">No Analytics Data Yet</h3>
+          <p class="text-slate-500 mb-4">Wait for users to check their keys</p>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
 // ===================== HELPERS =====================
 
 async function addEvent(type, key) {
@@ -2744,6 +2873,69 @@ async function sendWebhook(eventName, data) {
     });
   } catch (e) {
     console.error("webhook error", e);
+  }
+}
+
+// ===================== GEOLOCATION =====================
+async function getGeoLocation(ip) {
+  // Skip local IPs
+  if (!ip || ip === '127.0.0.1' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+    return { country: 'Local', countryCode: 'LC', city: 'Localhost', ip };
+  }
+  
+  try {
+    // Use free ipapi.co service (no API key needed, 1000 req/day)
+    const response = await fetch(`https://ipapi.co/${ip}/json/`, {
+      timeout: 3000
+    });
+    
+    if (!response.ok) {
+      return { country: 'Unknown', countryCode: 'XX', city: 'Unknown', ip };
+    }
+    
+    const data = await response.json();
+    
+    return {
+      ip,
+      country: data.country_name || 'Unknown',
+      countryCode: data.country_code || 'XX',
+      city: data.city || 'Unknown',
+      region: data.region || '',
+      timezone: data.timezone || '',
+      latitude: data.latitude || 0,
+      longitude: data.longitude || 0
+    };
+  } catch (error) {
+    console.error('Geolocation error:', error);
+    return { country: 'Unknown', countryCode: 'XX', city: 'Unknown', ip };
+  }
+}
+
+async function saveGeoStat(ip, action = 'check') {
+  try {
+    const geo = await getGeoLocation(ip);
+    
+    // Save or update stats for this country
+    await geoStatsCollection.updateOne(
+      { countryCode: geo.countryCode },
+      {
+        $set: {
+          country: geo.country,
+          countryCode: geo.countryCode,
+          lastSeen: new Date()
+        },
+        $inc: {
+          totalRequests: 1,
+          [`actions.${action}`]: 1
+        }
+      },
+      { upsert: true }
+    );
+    
+    return geo;
+  } catch (error) {
+    console.error('Save geo stat error:', error);
+    return null;
   }
 }
 
@@ -3529,6 +3721,15 @@ app.get("/workink-return", async (req, res) => {
 
 app.get("/check", async (req, res) => {
   const { key, token, hwid, userId, username } = req.query;
+  
+  // Get user IP for geolocation
+  const userIP = req.headers['x-forwarded-for']?.split(',')[0].trim() || 
+                 req.headers['x-real-ip'] || 
+                 req.connection.remoteAddress || 
+                 req.socket.remoteAddress;
+  
+  // Save geo stats asynchronously (don't wait)
+  saveGeoStat(userIP, 'check').catch(e => console.error('Geo stat error:', e));
 
   let realKey = key;
   if (!realKey && token) {
@@ -3667,6 +3868,8 @@ app.get("/admin", requireAdmin, async (req, res) => {
     pageContent = renderWebhooksPage(pass);
   } else if (page === "settings") {
     pageContent = await renderSettingsPage(pass);
+  } else if (page === "analytics") {
+    pageContent = await renderAnalyticsPage(pass);
   } else {
     // За замовчуванням: overview
     pageContent = await renderOverviewPage(pass, rangeDays, clicks, checkpoints, totalKeys, keysGenerated, keysUsed, scriptExecutions, totalChecks, list);
@@ -3832,6 +4035,12 @@ app.get("/admin", requireAdmin, async (req, res) => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
           </svg>
           Settings
+        </a>
+        <a href="/admin?pass=${pass}&page=analytics" class="sidebar-item ${req.query.page === 'analytics' ? 'active' : ''}">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Analytics
         </a>
       </div>
       
