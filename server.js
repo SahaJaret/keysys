@@ -41,7 +41,8 @@ const BASE_URL = getServerUrl();
 console.log("🌐 Server URL:", BASE_URL);
 
 // ===================== MONGODB CONNECTION =====================
-const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://sahajaret_db_user:M7aayGpyV8g86J6q@cluster0.imymvgf.mongodb.net/key_management?retryWrites=true&w=majority";
+// Измени MongoDB URI здесь! Не нужно добавлять в Environment Variables!
+const MONGODB_URI = "mongodb+srv://sahajaret_db_user:M7aayGpyV8g86J6q@cluster0.imymvgf.mongodb.net/key_management?retryWrites=true&w=majority";
 
 // MongoDB client options for Node.js 20+ compatibility
 const mongoOptions = {
