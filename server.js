@@ -1259,7 +1259,7 @@ async function renderMonetizationPage(pass) {
               <div class="p-3 glass rounded-lg bg-blue-500/5 border border-blue-500/20">
                 <p class="text-xs text-slate-400">
                   <strong>Return URL (set in Work.ink settings):</strong><br>
-                  <code class="text-blue-300">${provider.config?.returnUrl || 'Not configured'}</code>
+                  <code class="text-blue-300">\${provider.config?.returnUrl || 'Not configured'}</code>
                 </p>
               </div>
             </div>
