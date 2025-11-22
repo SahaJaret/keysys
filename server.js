@@ -159,7 +159,7 @@ async function connectDB() {
             returnUrl: BASE_URL + "/monetization-callback/workink",
             apiEndpoint: "https://work.ink/_api/v2/token/isValid/",
             apiKey: process.env.WORKINK_API_KEY || "",
-            useApiKey: false,
+            useApiKey: true,
             keyDuration: 1 // hours
           },
           stats: {
@@ -1103,34 +1103,16 @@ async function renderMonetizationPage(pass, req) {
       <div class="space-y-2">
         <div class="flex items-center gap-2 text-xs mb-2">
           <span class="text-slate-500">Mode:</span>
-          ${provider.config?.useApiKey ? `
           <span class="px-2 py-1 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 flex items-center gap-1">
             🔑 API Key
           </span>
           <span class="text-slate-400 text-[10px]">(Enhanced)</span>
-          ` : `
-          <span class="px-2 py-1 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 flex items-center gap-1">
-            🔗 Direct Link
-          </span>
-          <span class="text-slate-400 text-[10px]">(Standard)</span>
-          `}
         </div>
-        ${provider.config?.linkUrl && !provider.config?.useApiKey ? `
-        <div class="flex items-center gap-2 text-xs">
-          <span class="text-slate-500">Link URL:</span>
-          <code class="flex-1 glass rounded px-2 py-1 text-slate-300 truncate">${provider.config.linkUrl}</code>
-          <button onclick="navigator.clipboard.writeText('${provider.config.linkUrl}')" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300">
-            Copy
-          </button>
-        </div>
-        ` : ''}
-        ${provider.config?.useApiKey ? `
         <div class="flex items-center gap-2 text-xs">
           <span class="text-slate-500">API Key:</span>
-          <code class="flex-1 glass rounded px-2 py-1 text-slate-300">••••••••••••</code>
-          <span class="px-2 py-1 rounded bg-emerald-500/10 text-emerald-300 text-[10px]">Configured</span>
+          <code class="flex-1 glass rounded px-2 py-1 text-slate-300">${provider.config?.apiKey ? '••••••••••••' : 'Not configured'}</code>
+          ${provider.config?.apiKey ? '<span class="px-2 py-1 rounded bg-emerald-500/10 text-emerald-300 text-[10px]">Configured</span>' : '<span class="px-2 py-1 rounded bg-slate-500/10 text-slate-300 text-[10px]">Required</span>'}
         </div>
-        ` : ''}
         <div class="flex items-center gap-2 text-xs">
           <span class="text-slate-500">Callback URL:</span>
           <code class="flex-1 glass rounded px-2 py-1 text-slate-300 truncate">${returnUrl}</code>
@@ -1272,48 +1254,16 @@ async function renderMonetizationPage(pass, req) {
         if (provider.type === 'workink') {
           fieldsHtml = \`
             <div class="space-y-4">
-              <!-- Mode Selector -->
-              <div class="p-4 glass rounded-lg border border-purple-500/20 bg-purple-500/5">
-                <label class="block text-sm font-medium mb-3 text-purple-300">🔧 Integration Mode</label>
-                <div class="grid grid-cols-2 gap-3">
-                  <button type="button" onclick="setMode('link')" id="mode-link" class="p-3 rounded-lg border transition-all \${!provider.config?.useApiKey ? 'bg-blue-500/20 border-blue-500/50 text-blue-300' : 'glass border-slate-700/50 text-slate-400'}">
-                    <div class="text-center">
-                      <div class="text-2xl mb-1">🔗</div>
-                      <div class="text-xs font-medium">Direct Link</div>
-                      <div class="text-[10px] text-slate-500 mt-1">Public API</div>
-                    </div>
-                  </button>
-                  <button type="button" onclick="setMode('api')" id="mode-api" class="p-3 rounded-lg border transition-all \${provider.config?.useApiKey ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'glass border-slate-700/50 text-slate-400'}">
-                    <div class="text-center">
-                      <div class="text-2xl mb-1">🔑</div>
-                      <div class="text-xs font-medium">API Key</div>
-                      <div class="text-[10px] text-slate-500 mt-1">Enhanced</div>
-                    </div>
-                  </button>
-                </div>
+              <!-- API Key Field -->
+              <div>
+                <label class="block text-sm font-medium mb-2">Work.ink API Key</label>
+                <input name="apiKey" type="password" value="\${provider.config?.apiKey || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm font-mono" placeholder="Your Work.ink API key" required>
+                <p class="text-xs text-slate-400 mt-2">
+                  ✨ <strong>API Benefits:</strong> Authenticated requests, enhanced security, better rate limits, advanced features
+                </p>
               </div>
 
-              <!-- Link Mode Fields -->
-              <div id="link-mode-fields" class="\${provider.config?.useApiKey ? 'hidden' : ''}">
-                <div>
-                  <label class="block text-sm font-medium mb-2">Work.ink Link URL</label>
-                  <input name="linkUrl" value="\${provider.config?.linkUrl || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm" placeholder="https://workink.net/...">
-                  <p class="text-xs text-slate-400 mt-1">Your Work.ink shortened link</p>
-                </div>
-              </div>
-
-              <!-- API Mode Fields -->
-              <div id="api-mode-fields" class="\${!provider.config?.useApiKey ? 'hidden' : ''}">
-                <div>
-                  <label class="block text-sm font-medium mb-2">Work.ink API Key</label>
-                  <input name="apiKey" type="password" value="\${provider.config?.apiKey || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm font-mono" placeholder="Your Work.ink API key">
-                  <p class="text-xs text-slate-400 mt-2">
-                    ✨ <strong>API Benefits:</strong> Authenticated requests, enhanced security, better rate limits, advanced features
-                  </p>
-                </div>
-              </div>
-
-              <input type="hidden" name="useApiKey" id="useApiKeyHidden" value="\${provider.config?.useApiKey ? 'on' : 'off'}">
+              <input type="hidden" name="useApiKey" value="on">
 
               <div>
                 <label class="block text-sm font-medium mb-2">Key Duration (hours)</label>
@@ -1331,49 +1281,19 @@ async function renderMonetizationPage(pass, req) {
         } else if (provider.type === 'lootlabs') {
           fieldsHtml = \`
             <div class="space-y-4">
-              <!-- Mode Selector -->
-              <div class="p-4 glass rounded-lg border border-orange-500/20 bg-orange-500/5">
-                <label class="block text-sm font-medium mb-3 text-orange-300">🔧 Integration Mode</label>
-                <div class="grid grid-cols-2 gap-3">
-                  <button type="button" onclick="setMode('link')" id="mode-link" class="p-3 rounded-lg border transition-all \${!provider.config?.useApiKey ? 'bg-blue-500/20 border-blue-500/50 text-blue-300' : 'glass border-slate-700/50 text-slate-400'}">
-                    <div class="text-center">
-                      <div class="text-2xl mb-1">🔗</div>
-                      <div class="text-xs font-medium">Direct Link</div>
-                    </div>
-                  </button>
-                  <button type="button" onclick="setMode('api')" id="mode-api" class="p-3 rounded-lg border transition-all \${provider.config?.useApiKey ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'glass border-slate-700/50 text-slate-400'}">
-                    <div class="text-center">
-                      <div class="text-2xl mb-1">🔑</div>
-                      <div class="text-xs font-medium">API Key</div>
-                    </div>
-                  </button>
-                </div>
+              <!-- API Key Field -->
+              <div>
+                <label class="block text-sm font-medium mb-2">Lootlabs API Key</label>
+                <input name="apiKey" type="password" value="\${provider.config?.apiKey || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm font-mono" placeholder="Your Lootlabs API key (64 char hex)" required>
+                <p class="text-xs text-slate-400 mt-2">
+                  ✨ <strong>API Benefits:</strong> Anti-Bypass protection, dynamic redirects, better security
+                </p>
+                <p class="text-xs text-emerald-400 mt-1">
+                  ℹ️ Get API key from Lootlabs Creator Panel → API section
+                </p>
               </div>
 
-              <!-- Link Mode Fields -->
-              <div id="link-mode-fields" class="\${provider.config?.useApiKey ? 'hidden' : ''}">
-                <div>
-                  <label class="block text-sm font-medium mb-2">Lootlabs Base Link</label>
-                  <input name="linkUrl" value="\${provider.config?.linkUrl || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm" placeholder="https://loot-link.com/s?qo0f">
-                  <p class="text-xs text-slate-400 mt-1">Create ONE link in Lootlabs panel and paste here</p>
-                </div>
-              </div>
-
-              <!-- API Mode Fields -->
-              <div id="api-mode-fields" class="\${!provider.config?.useApiKey ? 'hidden' : ''}">
-                <div>
-                  <label class="block text-sm font-medium mb-2">Lootlabs API Key</label>
-                  <input name="apiKey" type="password" value="\${provider.config?.apiKey || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm font-mono" placeholder="Your Lootlabs API key (64 char hex)">
-                  <p class="text-xs text-slate-400 mt-2">
-                    ✨ <strong>API Benefits:</strong> Anti-Bypass protection, dynamic redirects, better security
-                  </p>
-                  <p class="text-xs text-emerald-400 mt-1">
-                    ℹ️ Get API key from Lootlabs Creator Panel → API section
-                  </p>
-                </div>
-              </div>
-
-              <input type="hidden" name="useApiKey" id="useApiKeyHidden" value="\${provider.config?.useApiKey ? 'on' : 'off'}">
+              <input type="hidden" name="useApiKey" value="on">
 
               <div class="grid grid-cols-2 gap-4">
                 <div>
@@ -1402,54 +1322,20 @@ async function renderMonetizationPage(pass, req) {
         } else if (provider.type === 'linkvertise') {
           fieldsHtml = \`
             <div class="space-y-4">
-              <!-- Mode Selector -->
-              <div class="p-4 glass rounded-lg border border-cyan-500/20 bg-cyan-500/5">
-                <label class="block text-sm font-medium mb-3 text-cyan-300">🔧 Integration Mode</label>
-                <div class="grid grid-cols-2 gap-3">
-                  <button type="button" onclick="setMode('link')" id="mode-link" class="p-3 rounded-lg border transition-all \${!provider.config?.useApiKey ? 'bg-blue-500/20 border-blue-500/50 text-blue-300' : 'glass border-slate-700/50 text-slate-400'}">
-                    <div class="text-center">
-                      <div class="text-2xl mb-1">🔗</div>
-                      <div class="text-xs font-medium">Direct Link</div>
-                    </div>
-                  </button>
-                  <button type="button" onclick="setMode('api')" id="mode-api" class="p-3 rounded-lg border transition-all \${provider.config?.useApiKey ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300' : 'glass border-slate-700/50 text-slate-400'}">
-                    <div class="text-center">
-                      <div class="text-2xl mb-1">🔑</div>
-                      <div class="text-xs font-medium">API Key</div>
-                    </div>
-                  </button>
-                </div>
+              <!-- API Key Field -->
+              <div>
+                <label class="block text-sm font-medium mb-2">Linkvertise API Key</label>
+                <input name="apiKey" type="password" value="\${provider.config?.apiKey || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm font-mono" placeholder="Your Linkvertise API key" required>
+              </div>
+              <div>
+                <label class="block text-sm font-medium mb-2">User ID</label>
+                <input name="userId" value="\${provider.config?.userId || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm" placeholder="Required for API mode" required>
+                <p class="text-xs text-slate-400 mt-2">
+                  ✨ <strong>API Benefits:</strong> Dynamic link creation, better tracking, programmatic access
+                </p>
               </div>
 
-              <!-- Link Mode Fields -->
-              <div id="link-mode-fields" class="\${provider.config?.useApiKey ? 'hidden' : ''}">
-                <div>
-                  <label class="block text-sm font-medium mb-2">Linkvertise Link URL</label>
-                  <input name="linkUrl" value="\${provider.config?.linkUrl || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm" placeholder="https://linkvertise.com/...">
-                  <p class="text-xs text-slate-400 mt-1">Your Linkvertise shortened link</p>
-                </div>
-                <div>
-                  <label class="block text-sm font-medium mb-2">User ID (Optional)</label>
-                  <input name="userId" value="\${provider.config?.userId || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm" placeholder="Your Linkvertise User ID">
-                </div>
-              </div>
-
-              <!-- API Mode Fields -->
-              <div id="api-mode-fields" class="\${!provider.config?.useApiKey ? 'hidden' : ''}">
-                <div>
-                  <label class="block text-sm font-medium mb-2">Linkvertise API Key</label>
-                  <input name="apiKey" type="password" value="\${provider.config?.apiKey || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm font-mono" placeholder="Your Linkvertise API key">
-                </div>
-                <div>
-                  <label class="block text-sm font-medium mb-2">User ID</label>
-                  <input name="userId" value="\${provider.config?.userId || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm" placeholder="Required for API mode">
-                  <p class="text-xs text-slate-400 mt-2">
-                    ✨ <strong>API Benefits:</strong> Dynamic link creation, better tracking, programmatic access
-                  </p>
-                </div>
-              </div>
-
-              <input type="hidden" name="useApiKey" id="useApiKeyHidden" value="\${provider.config?.useApiKey ? 'on' : 'off'}">
+              <input type="hidden" name="useApiKey" value="on">
 
               <div>
                 <label class="block text-sm font-medium mb-2">Key Duration (hours)</label>
@@ -1474,29 +1360,6 @@ async function renderMonetizationPage(pass, req) {
         document.getElementById('provider-modal').classList.add('hidden');
       }
 
-      function setMode(mode) {
-        const linkBtn = document.getElementById('mode-link');
-        const apiBtn = document.getElementById('mode-api');
-        const linkFields = document.getElementById('link-mode-fields');
-        const apiFields = document.getElementById('api-mode-fields');
-        const hiddenInput = document.getElementById('useApiKeyHidden');
-        
-        if (mode === 'link') {
-          // Activate link mode
-          linkBtn.className = 'p-3 rounded-lg border transition-all bg-blue-500/20 border-blue-500/50 text-blue-300';
-          apiBtn.className = 'p-3 rounded-lg border transition-all glass border-slate-700/50 text-slate-400';
-          linkFields.classList.remove('hidden');
-          apiFields.classList.add('hidden');
-          hiddenInput.value = 'off';
-        } else {
-          // Activate API mode
-          linkBtn.className = 'p-3 rounded-lg border transition-all glass border-slate-700/50 text-slate-400';
-          apiBtn.className = 'p-3 rounded-lg border transition-all bg-emerald-500/20 border-emerald-500/50 text-emerald-300';
-          linkFields.classList.add('hidden');
-          apiFields.classList.remove('hidden');
-          hiddenInput.value = 'on';
-        }
-      }
 
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') closeProviderModal();
