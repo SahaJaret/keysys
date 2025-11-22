@@ -44,11 +44,11 @@ console.log("🌐 Server URL:", BASE_URL);
 // Измени MongoDB URI здесь! Не нужно добавлять в Environment Variables!
 const MONGODB_URI = "mongodb+srv://sahajaret_db_user:M7aayGpyV8g86J6q@cluster0.imymvgf.mongodb.net/key_management?retryWrites=true&w=majority";
 
-// MongoDB client options for Node.js 20+ compatibility
+// MongoDB client options - compatible with MongoDB 5.x and Node.js 20
 const mongoOptions = {
   serverSelectionTimeoutMS: 30000,
+  connectTimeoutMS: 30000,
   socketTimeoutMS: 45000,
-  family: 4, // Force IPv4
 };
 
 const client = new MongoClient(MONGODB_URI, mongoOptions);
