@@ -1,0 +1,10 @@
+{
+  "pass": "admin123",
+  "name": "Simple Test",
+  "slug": "simple-test",
+  "description": "Testing if obfuscated code works",
+  "content": "print('Hello from obfuscated script!')\nprint('If you see this, obfuscation works!')\nreturn true",
+  "enabled": true,
+  "obfuscated": true
+}
+

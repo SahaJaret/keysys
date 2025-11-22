@@ -1,0 +1,10 @@
+{
+  "pass": "admin123",
+  "name": "Protected Script",
+  "slug": "protected-script",
+  "description": "Script with real obfuscation",
+  "content": "local player = game.Players.LocalPlayer\nlocal message = \"Hello \" .. player.Name .. \"!\"\nprint(message)\n\ngame.StarterGui:SetCore(\"SendNotification\", {\n    Title = \"Protected Script\";\n    Text = \"Loaded successfully!\";\n    Duration = 3;\n})",
+  "enabled": true,
+  "obfuscated": true
+}
+

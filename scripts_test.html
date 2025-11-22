@@ -1,0 +1,456 @@
+
+  <!doctype html>
+  <html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard - Key Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @keyframes gradient {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+      body {
+        background: linear-gradient(-45deg, #0f172a, #1e1b4b, #312e81, #1e293b);
+        background-size: 400% 400%;
+        animation: gradient 15s ease infinite;
+      }
+      .glass {
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(148, 163, 184, 0.1);
+      }
+      .sidebar-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-radius: 0.75rem;
+        color: rgba(148, 163, 184, 0.8);
+        text-decoration: none;
+        font-size: 0.875rem;
+        transition: all 0.2s;
+      }
+      .sidebar-item:hover {
+        background: rgba(59, 130, 246, 0.1);
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .sidebar-item.active {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(147, 51, 234, 0.2));
+        color: white;
+        font-weight: 500;
+      }
+      .stat-card {
+        background: rgba(15, 23, 42, 0.7);
+        backdrop-filter: blur(20px);
+        border: 1px solid rgba(148, 163, 184, 0.1);
+        border-radius: 1rem;
+        padding: 1.25rem;
+        transition: all 0.3s;
+      }
+      .stat-card:hover {
+        transform: translateY(-2px);
+        border-color: rgba(59, 130, 246, 0.3);
+        box-shadow: 0 10px 30px rgba(59, 130, 246, 0.1);
+      }
+      .scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+      .scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.4); border-radius: 10px; }
+      .scrollbar::-webkit-scrollbar-thumb { background: rgba(59, 130, 246, 0.3); border-radius: 10px; }
+      .scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(59, 130, 246, 0.5); }
+    </style>
+  </head>
+  <body class="text-white min-h-screen flex">
+    <!-- Sidebar -->
+    <aside class="w-64 glass border-r border-slate-800/50 flex flex-col p-4 flex-shrink-0">
+      <div class="flex items-center gap-3 mb-8 pb-4 border-b border-slate-800/50">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+          </svg>
+        </div>
+        <div>
+          <p class="font-bold">Key Manager</p>
+          <p class="text-xs text-slate-400">Admin Dashboard</p>
+        </div>
+      </div>
+      
+      <div class="text-xs uppercase tracking-wider text-slate-500 mb-3 px-2">Navigation</div>
+      <div class="space-y-1 flex-1">
+        <a href="/admin?pass=admin123&page=overview" class="sidebar-item ">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+          </svg>
+          Overview
+        </a>
+        <a href="/admin?pass=admin123&page=keys" class="sidebar-item ">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
+          </svg>
+          Keys
+        </a>
+        <a href="/admin?pass=admin123&page=checkpoints" class="sidebar-item ">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+          </svg>
+          Checkpoints
+        </a>
+        <a href="/admin?pass=admin123&page=scripts" class="sidebar-item active">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+          </svg>
+          Scripts
+        </a>
+        <a href="/admin?pass=admin123&page=monetization" class="sidebar-item ">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          Monetization
+        </a>
+        <a href="/admin?pass=admin123&page=services" class="sidebar-item ">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+          </svg>
+          Services
+        </a>
+        <a href="/admin?pass=admin123&page=webhooks" class="sidebar-item ">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+          </svg>
+          Webhooks
+        </a>
+        <a href="/admin?pass=admin123&page=settings" class="sidebar-item ">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          Settings
+        </a>
+      </div>
+      
+      <div class="pt-4 mt-auto border-t border-slate-800/50">
+        <div class="flex items-center gap-3 px-2">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-blue-600 flex items-center justify-center text-xs font-bold">A</div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium truncate">Admin</p>
+            <p class="text-xs text-slate-500">Logged in</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 min-h-screen overflow-auto">
+      
+    <header class="glass border-b border-slate-800/50 px-6 py-5 sticky top-0 z-10">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold mb-1">📜 Scripts Manager</h1>
+          <p class="text-sm text-slate-400">Upload, manage and deliver Lua scripts for Roblox</p>
+        </div>
+        <button onclick="openAddScriptModal()" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg font-medium transition-all shadow-lg shadow-blue-500/30 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          New Script
+        </button>
+      </div>
+    </header>
+
+    <div class="p-6 space-y-6">
+      <!-- Search Bar -->
+      <div class="glass rounded-xl p-4">
+        <div class="flex gap-3">
+          <div class="flex-1 relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+            <input 
+              type="text" 
+              value="" 
+              onchange="window.location.href='/admin?pass=admin123&page=scripts&q=' + this.value"
+              placeholder="Search scripts by name, slug or description..." 
+              class="w-full pl-10 pr-4 py-2 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+          <button onclick="window.location.reload()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Scripts Grid -->
+      
+        <div class="glass rounded-xl p-12 text-center">
+          <div class="w-20 h-20 mx-auto mb-4 rounded-full bg-slate-800 flex items-center justify-center">
+            <svg class="w-10 h-10 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+            </svg>
+          </div>
+          <h3 class="text-xl font-semibold mb-2 text-slate-300">No scripts yet</h3>
+          <p class="text-slate-500 mb-4">Create your first script to get started</p>
+          <button onclick="openAddScriptModal()" class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg font-medium transition-all">
+            Create First Script
+          </button>
+        </div>
+      
+    </div>
+
+    <!-- Add/Edit Script Modal -->
+    <div id="scriptModal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="glass rounded-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto scrollbar">
+        <div class="flex items-center justify-between mb-6">
+          <h2 id="modalTitle" class="text-2xl font-bold">Add New Script</h2>
+          <button onclick="closeScriptModal()" class="p-2 hover:bg-slate-700 rounded-lg transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <form id="scriptForm" class="space-y-4">
+          <input type="hidden" id="scriptId" name="scriptId">
+          
+          <div>
+            <label class="block text-sm font-medium mb-2">Script Name *</label>
+            <input 
+              type="text" 
+              id="scriptName" 
+              name="name" 
+              required
+              placeholder="My Awesome Script"
+              class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-2">Slug (URL identifier) *</label>
+            <div class="flex gap-2">
+              <input 
+                type="text" 
+                id="scriptSlug" 
+                name="slug" 
+                required
+                placeholder="my-awesome-script"
+                pattern="[a-z0-9-]+"
+                class="flex-1 px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <button type="button" onclick="generateSlug()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+                Generate
+              </button>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">Only lowercase letters, numbers and hyphens</p>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-2">Description</label>
+            <textarea 
+              id="scriptDescription" 
+              name="description" 
+              rows="2"
+              placeholder="A brief description of what this script does..."
+              class="w-full px-4 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+            ></textarea>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium mb-2">Lua Code *</label>
+            <div class="relative">
+              <textarea 
+                id="scriptContent" 
+                name="content" 
+                required
+                rows="15"
+                placeholder="-- Your Lua code here
+print('Hello from Roblox!')"
+                class="w-full px-4 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none scrollbar"
+                style="tab-size: 2;"
+              ></textarea>
+              <div class="absolute top-2 right-2 text-xs text-slate-500" id="codeSize">0 characters</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="flex items-center gap-3 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+              <input 
+                type="checkbox" 
+                id="scriptEnabled" 
+                name="enabled" 
+                checked
+                class="w-5 h-5 rounded bg-slate-800 border-slate-600 text-blue-600 focus:ring-2 focus:ring-blue-500"
+              />
+              <div>
+                <label for="scriptEnabled" class="block font-medium cursor-pointer">Enable Script</label>
+                <p class="text-xs text-slate-500">Script can be accessed via URL</p>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3 p-4 bg-slate-900/50 rounded-lg border border-slate-700">
+              <input 
+                type="checkbox" 
+                id="scriptObfuscated" 
+                name="obfuscated"
+                class="w-5 h-5 rounded bg-slate-800 border-slate-600 text-purple-600 focus:ring-2 focus:ring-purple-500"
+              />
+              <div>
+                <label for="scriptObfuscated" class="block font-medium cursor-pointer">🔒 Obfuscate Code</label>
+                <p class="text-xs text-slate-500">Protect your code (basic)</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-3 pt-4">
+            <button 
+              type="submit"
+              class="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg font-medium transition-all"
+            >
+              Save Script
+            </button>
+            <button 
+              type="button"
+              onclick="closeScriptModal()"
+              class="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-lg font-medium transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script>
+      // Update code size counter
+      document.getElementById('scriptContent').addEventListener('input', function() {
+        document.getElementById('codeSize').textContent = this.value.length + ' characters';
+      });
+
+      // Generate slug from name
+      function generateSlug() {
+        const name = document.getElementById('scriptName').value;
+        const slug = name.toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .trim();
+        document.getElementById('scriptSlug').value = slug;
+      }
+
+      // Auto-generate slug when name changes
+      document.getElementById('scriptName').addEventListener('input', function() {
+        if (!document.getElementById('scriptId').value) {
+          generateSlug();
+        }
+      });
+
+      // Copy to clipboard
+      function copyToClipboard(inputId, button) {
+        const input = document.getElementById(inputId);
+        input.select();
+        document.execCommand('copy');
+        
+        const originalText = button.textContent;
+        button.textContent = '✓ Copied!';
+        button.classList.add('bg-emerald-600');
+        
+        setTimeout(() => {
+          button.textContent = originalText;
+          button.classList.remove('bg-emerald-600');
+        }, 2000);
+      }
+
+      // Open add script modal
+      function openAddScriptModal() {
+        document.getElementById('modalTitle').textContent = 'Add New Script';
+        document.getElementById('scriptForm').reset();
+        document.getElementById('scriptId').value = '';
+        document.getElementById('scriptEnabled').checked = true;
+        document.getElementById('scriptModal').classList.remove('hidden');
+      }
+
+      // Close modal
+      function closeScriptModal() {
+        document.getElementById('scriptModal').classList.add('hidden');
+      }
+
+      // Edit script
+      async function editScript(id) {
+        const response = await fetch(`/admin/scripts/get?id=${id}&pass=admin123`);
+        const script = await response.json();
+        
+        document.getElementById('modalTitle').textContent = 'Edit Script';
+        document.getElementById('scriptId').value = script._id;
+        document.getElementById('scriptName').value = script.name;
+        document.getElementById('scriptSlug').value = script.slug;
+        document.getElementById('scriptDescription').value = script.description || '';
+        document.getElementById('scriptContent').value = script.versions[script.versions.length - 1].content;
+        document.getElementById('scriptEnabled').checked = script.enabled;
+        document.getElementById('scriptObfuscated').checked = script.obfuscated;
+        document.getElementById('codeSize').textContent = script.versions[script.versions.length - 1].content.length + ' characters';
+        
+        document.getElementById('scriptModal').classList.remove('hidden');
+      }
+
+      // Delete script
+      async function deleteScript(id, name) {
+        if (!confirm(`Are you sure you want to delete "${name}"? This action cannot be undone.`)) {
+          return;
+        }
+        
+        const response = await fetch('/admin/scripts/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, pass: 'admin123' })
+        });
+        
+        if (response.ok) {
+          location.reload();
+        } else {
+          alert('Failed to delete script');
+        }
+      }
+
+      // Submit form
+      document.getElementById('scriptForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const formData = new FormData(e.target);
+        const data = {
+          pass: 'admin123',
+          id: formData.get('scriptId') || undefined,
+          name: formData.get('name'),
+          slug: formData.get('slug'),
+          description: formData.get('description'),
+          content: formData.get('content'),
+          enabled: document.getElementById('scriptEnabled').checked,
+          obfuscated: document.getElementById('scriptObfuscated').checked
+        };
+        
+        const url = data.id ? '/admin/scripts/edit' : '/admin/scripts/add';
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+          location.reload();
+        } else {
+          const error = await response.text();
+          alert('Error: ' + error);
+        }
+      });
+
+      // Close modal on ESC
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeScriptModal();
+      });
+    </script>
+  
+    </main>
+  </body>
+  </html>
+  
