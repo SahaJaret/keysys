@@ -4835,56 +4835,29 @@ end)
 
 // Advanced Lua obfuscation function
 function obfuscateLua(code) {
-  // Remove comments first
+  // Simple and reliable obfuscation using loadstring
+  // Remove comments to reduce size
   code = code.replace(/--\[\[[\s\S]*?\]\]/g, '');
   code = code.replace(/--[^\n]*/g, '');
   
-  // Generate random identifiers
-  const generateId = () => {
-    const chars = 'abcdefghijklmnopqrstuvwxyz';
-    let id = '_';
-    for (let i = 0; i < 8; i++) {
-      id += chars[Math.floor(Math.random() * chars.length)];
-    }
-    return id;
-  };
+  // Escape special characters for Lua string
+  const escaped = code
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .replace(/\t/g, '\\t');
   
-  // Generate multiple random IDs for obfuscation
-  const ids = {
-    main: generateId(),
-    loader: generateId(),
-    decoder: generateId(),
-    key: generateId(),
-    result: generateId(),
-    xor: generateId(),
-    str: generateId(),
-    byte: generateId(),
-    char: generateId(),
-    i: generateId()
-  };
-  
-  // XOR cipher for the code
-  const xorCipher = (str, key) => {
-    let result = [];
-    for (let i = 0; i < str.length; i++) {
-      result.push(str.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-    }
-    return result;
-  };
-  
-  // Generate random key
-  const randomKey = Math.random().toString(36).substring(2, 15);
-  
-  // Encode the actual code
-  const encoded = xorCipher(code, randomKey);
-  
-  // Convert to Lua table format
-  const luaTable = '{' + encoded.join(',') + '}';
-  
-  // Create obfuscated wrapper
-  const obfuscated = `-- Protected by Key System
--- Reverse engineering is prohibited
-local ${ids.loader}=${luaTable};local ${ids.key}="${randomKey}";local ${ids.decoder}=function(${ids.str},${ids.key})local ${ids.result}="";for ${ids.i}=1,#${ids.str} do local ${ids.byte}=${ids.str}[${ids.i}];local ${ids.char}=string.char(${ids.byte}~string.byte(${ids.key},(${ids.i}-1)%#${ids.key}+1));${ids.result}=${ids.result}..${ids.char} end;return ${ids.result} end;local ${ids.main}=${ids.decoder}(${ids.loader},${ids.key});local ${ids.result},${ids.xor}=loadstring(${ids.main});if ${ids.result} then return ${ids.result}()else error("Failed to load")end`;
+  // Simple wrapper with loadstring
+  const obfuscated = `-- Protected Script
+return (function()
+    local _=(loadstring or load)("${escaped}")
+    if _ then
+        return _()
+    else
+        error("Failed to load script")
+    end
+end)()`;
   
   return obfuscated;
 }
