@@ -4,7 +4,6 @@
 import express from "express";
 import crypto from "crypto";
 import { MongoClient } from "mongodb";
-import { WebSocketServer } from "ws";
 
 const app = express();
 app.use(express.json());
@@ -64,8 +63,6 @@ let monetizationProvidersCollection;
 let scriptsCollection;
 let settingsCollection;
 let geoStatsCollection;
-let developersCollection;
-let marketplaceCollection;
 
 async function connectDB() {
   try {
@@ -81,8 +78,6 @@ async function connectDB() {
     scriptsCollection = db.collection("scripts");
     settingsCollection = db.collection("settings");
     geoStatsCollection = db.collection("geo_stats");
-    developersCollection = db.collection("developers");
-    marketplaceCollection = db.collection("marketplace_scripts");
     
     // Initialize settings if not exist
     const existingSettings = await settingsCollection.findOne({ _id: "global" });
@@ -1263,7 +1258,7 @@ async function renderMonetizationPage(pass) {
               <div class="p-3 glass rounded-lg bg-blue-500/5 border border-blue-500/20">
                 <p class="text-xs text-slate-400">
                   <strong>Return URL (set in Work.ink settings):</strong><br>
-                  <code class="text-blue-300">\${provider.config?.returnUrl || ''}</code>
+                  <code class="text-blue-300">${provider.config?.returnUrl || 'Not configured'}</code>
                 </p>
               </div>
             </div>
@@ -2591,21 +2586,6 @@ async function renderSettingsPage(pass) {
             </div>
             <p class="text-xs text-slate-400 mt-2">Notifications for new key generation</p>
           </div>
-
-          <div class="glass rounded-lg p-4 border border-slate-700/50 bg-gradient-to-br from-emerald-500/5 to-blue-500/5">
-            <div class="flex items-center gap-2 mb-2">
-              <label class="text-xs text-slate-400 uppercase tracking-wider">Google AdSense Publisher ID</label>
-              <span class="px-2 py-0.5 text-xs rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">💰 Monetization</span>
-            </div>
-            <div class="flex gap-2">
-              <input type="text" id="adsenseId" value="${settings.adsenseId || 'ca-pub-9411126747085522'}" placeholder="ca-pub-XXXXXXXXXXXXXXXX" class="flex-1 bg-slate-950/40 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-300">
-              <button onclick="saveSettings()" class="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-lg text-sm font-medium border border-emerald-500/20">Save</button>
-            </div>
-            <p class="text-xs text-emerald-400/70 mt-2">💡 Your ads show on /get-key page. <strong>3 ads per user = 3x more profit!</strong></p>
-            <div class="mt-2 p-2 bg-slate-900/50 rounded text-xs text-slate-400">
-              <strong>Estimated earnings:</strong> $2-5 per 1000 keys (depends on country/ad quality) + Work.ink
-            </div>
-          </div>
         </div>
       </div>
 
@@ -2668,13 +2648,12 @@ async function renderSettingsPage(pass) {
       async function saveSettings() {
         const youtubeChannel = document.getElementById('youtubeChannel').value;
         const discordWebhook = document.getElementById('discordWebhook').value;
-        const adsenseId = document.getElementById('adsenseId').value;
         
         try {
           const response = await fetch('/admin/settings/save?pass=${pass}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ youtubeChannel, discordWebhook, adsenseId })
+            body: JSON.stringify({ youtubeChannel, discordWebhook })
           });
           
           const result = await response.json();
@@ -2816,604 +2795,6 @@ async function renderAnalyticsPage(pass) {
         </div>
       ` : ''}
     </div>
-  `;
-}
-
-// ===================== LIVE CONSOLE PAGE =====================
-function renderLiveConsolePage(pass) {
-  return `
-    <header class="glass border-b border-slate-800/50 px-6 py-5 sticky top-0 z-10">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold mb-1">📺 Live Console</h1>
-          <p class="text-sm text-slate-400">Real-time activity monitoring</p>
-        </div>
-        <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50">
-            <span id="ws-status" class="w-2 h-2 rounded-full bg-slate-500"></span>
-            <span id="ws-text" class="text-xs text-slate-400">Connecting...</span>
-          </div>
-          <button onclick="clearConsole()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors text-sm">
-            Clear
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <div class="p-6">
-      <div class="glass rounded-xl p-4" style="height: calc(100vh - 220px); overflow-y: auto;" id="console-container">
-        <div id="console-logs" class="space-y-2 font-mono text-sm">
-          <div class="text-slate-500 text-center py-8">
-            Waiting for events...
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <style>
-      #console-container {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
-      }
-      #console-container::-webkit-scrollbar {
-        width: 8px;
-      }
-      #console-container::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      #console-container::-webkit-scrollbar-thumb {
-        background: rgba(148, 163, 184, 0.3);
-        border-radius: 4px;
-      }
-      .console-entry {
-        padding: 8px 12px;
-        border-radius: 6px;
-        border-left: 3px solid;
-        background: rgba(0, 0, 0, 0.2);
-        animation: slideIn 0.3s ease-out;
-      }
-      .console-success {
-        border-color: #10b981;
-        background: rgba(16, 185, 129, 0.05);
-      }
-      .console-error {
-        border-color: #ef4444;
-        background: rgba(239, 68, 68, 0.05);
-      }
-      .console-info {
-        border-color: #3b82f6;
-        background: rgba(59, 130, 246, 0.05);
-      }
-      @keyframes slideIn {
-        from {
-          opacity: 0;
-          transform: translateY(-10px);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-    </style>
-
-    <script>
-      let ws = null;
-      let autoScroll = true;
-      const maxLogs = 100;
-      
-      function connectWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = protocol + '//' + window.location.host;
-        
-        ws = new WebSocket(wsUrl);
-        
-        ws.onopen = () => {
-          console.log('WebSocket connected');
-          document.getElementById('ws-status').className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
-          document.getElementById('ws-text').textContent = 'Connected';
-        };
-        
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            addLogEntry(data);
-          } catch (e) {
-            console.error('Failed to parse message:', e);
-          }
-        };
-        
-        ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
-          document.getElementById('ws-status').className = 'w-2 h-2 rounded-full bg-red-500';
-          document.getElementById('ws-text').textContent = 'Error';
-        };
-        
-        ws.onclose = () => {
-          console.log('WebSocket closed, reconnecting...');
-          document.getElementById('ws-status').className = 'w-2 h-2 rounded-full bg-amber-500';
-          document.getElementById('ws-text').textContent = 'Reconnecting...';
-          setTimeout(connectWebSocket, 3000);
-        };
-      }
-      
-      function addLogEntry(data) {
-        const container = document.getElementById('console-logs');
-        const entries = container.children;
-        
-        // Remove placeholder
-        if (entries.length === 1 && entries[0].textContent.includes('Waiting')) {
-          container.innerHTML = '';
-        }
-        
-        // Remove old entries if too many
-        while (entries.length >= maxLogs) {
-          container.removeChild(entries[0]);
-        }
-        
-        const timestamp = new Date(data.timestamp).toLocaleTimeString('en-US', {
-          hour12: false,
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit'
-        });
-        
-        let statusClass = 'console-info';
-        let statusIcon = '📡';
-        let statusText = 'INFO';
-        
-        if (data.status === 'success') {
-          statusClass = 'console-success';
-          statusIcon = '✅';
-          statusText = 'SUCCESS';
-        } else if (data.status === 'error') {
-          statusClass = 'console-error';
-          statusIcon = '❌';
-          statusText = 'ERROR';
-        }
-        
-        let message = '';
-        if (data.type === 'check') {
-          if (data.status === 'success') {
-            message = \`Key <span style="color: #60a5fa">\${data.data.key}</span> validated successfully\`;
-            if (data.data.username) {
-              message += \` by <span style="color: #a78bfa">\${data.data.username}</span>\`;
-            }
-          } else {
-            message = \`Key check failed: <span style="color: #f87171">\${data.data.reason || 'unknown'}</span>\`;
-            if (data.data.key) {
-              message += \` (key: \${data.data.key})\`;
-            }
-          }
-        } else if (data.type === 'log') {
-          message = JSON.stringify(data.data);
-        } else {
-          message = \`\${data.type}: \${JSON.stringify(data.data)}\`;
-        }
-        
-        const entry = document.createElement('div');
-        entry.className = \`console-entry \${statusClass}\`;
-        entry.innerHTML = \`
-          <div class="flex items-start gap-3">
-            <span class="text-lg">\${statusIcon}</span>
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <span class="text-xs text-slate-500">\${timestamp}</span>
-                <span class="px-2 py-0.5 text-xs rounded \${statusClass === 'console-success' ? 'bg-emerald-500/20 text-emerald-300' : statusClass === 'console-error' ? 'bg-red-500/20 text-red-300' : 'bg-blue-500/20 text-blue-300'}">\${statusText}</span>
-              </div>
-              <div class="text-sm text-slate-300">\${message}</div>
-            </div>
-          </div>
-        \`;
-        
-        container.appendChild(entry);
-        
-        // Auto-scroll to bottom
-        if (autoScroll) {
-          const consoleContainer = document.getElementById('console-container');
-          consoleContainer.scrollTop = consoleContainer.scrollHeight;
-        }
-      }
-      
-      function clearConsole() {
-        document.getElementById('console-logs').innerHTML = \`
-          <div class="text-slate-500 text-center py-8">
-            Console cleared. Waiting for events...
-          </div>
-        \`;
-      }
-      
-      // Detect manual scroll (disable auto-scroll)
-      document.getElementById('console-container').addEventListener('scroll', (e) => {
-        const el = e.target;
-        autoScroll = (el.scrollHeight - el.scrollTop - el.clientHeight) < 50;
-      });
-      
-      // Connect on page load
-      connectWebSocket();
-    </script>
-  `;
-}
-
-// ===================== MARKETPLACE PAGE =====================
-async function renderMarketplacePage(pass) {
-  // Get all marketplace scripts
-  const marketScripts = await marketplaceCollection.find().sort({ sales: -1 }).toArray();
-  
-  // Get developers info
-  const developers = await developersCollection.find().toArray();
-  const devMap = {};
-  developers.forEach(dev => {
-    devMap[dev._id.toString()] = dev;
-  });
-  
-  // Calculate totals
-  const totalScripts = marketScripts.length;
-  const totalSales = marketScripts.reduce((sum, script) => sum + (script.sales || 0), 0);
-  const totalRevenue = marketScripts.reduce((sum, script) => sum + ((script.sales || 0) * script.price), 0);
-  
-  return `
-    <header class="glass border-b border-slate-800/50 px-6 py-5 sticky top-0 z-10">
-      <div class="flex items-center justify-between">
-        <div>
-          <h1 class="text-2xl font-bold mb-1">🛒 Script Marketplace</h1>
-          <p class="text-sm text-slate-400">Buy and sell Lua scripts</p>
-        </div>
-        <button onclick="openAddDeveloperModal()" class="px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg font-medium transition-all shadow-lg">
-          + Add Developer
-        </button>
-      </div>
-    </header>
-
-    <div class="p-6 space-y-6">
-      <!-- Stats Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div class="glass rounded-xl p-6 border border-blue-500/20">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-medium text-slate-400">Total Scripts</h3>
-            <svg class="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-            </svg>
-          </div>
-          <p class="text-3xl font-bold text-white">${totalScripts}</p>
-          <p class="text-xs text-slate-500 mt-1">On marketplace</p>
-        </div>
-
-        <div class="glass rounded-xl p-6 border border-emerald-500/20">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-medium text-slate-400">Total Sales</h3>
-            <svg class="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-            </svg>
-          </div>
-          <p class="text-3xl font-bold text-white">${totalSales}</p>
-          <p class="text-xs text-slate-500 mt-1">All-time purchases</p>
-        </div>
-
-        <div class="glass rounded-xl p-6 border border-purple-500/20">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="text-sm font-medium text-slate-400">Revenue</h3>
-            <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-            </svg>
-          </div>
-          <p class="text-3xl font-bold text-white">$${totalRevenue.toFixed(2)}</p>
-          <p class="text-xs text-slate-500 mt-1">Platform commission: ${(totalRevenue * 0.2).toFixed(2)}</p>
-        </div>
-      </div>
-
-      <!-- Developers Section -->
-      <div class="glass rounded-xl p-6">
-        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-          </svg>
-          Developers (${developers.length})
-        </h2>
-        
-        ${developers.length === 0 ? `
-          <div class="text-center py-8 text-slate-500">
-            <p>No developers yet. Add your first developer!</p>
-          </div>
-        ` : `
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            ${developers.map(dev => `
-              <div class="glass rounded-lg p-4 border border-slate-700 hover:border-blue-500/30 transition-all">
-                <div class="flex items-start justify-between mb-3">
-                  <div class="flex items-center gap-3">
-                    <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center font-bold text-white text-lg">
-                      ${dev.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 class="font-semibold text-white">${dev.name}</h3>
-                      <p class="text-xs text-slate-500">${dev.email}</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-slate-700">
-                  <div class="text-center">
-                    <p class="text-xs text-slate-500">Scripts</p>
-                    <p class="text-lg font-bold text-blue-400">${marketScripts.filter(s => s.developerId === dev._id.toString()).length}</p>
-                  </div>
-                  <div class="text-center">
-                    <p class="text-xs text-slate-500">Sales</p>
-                    <p class="text-lg font-bold text-emerald-400">${marketScripts.filter(s => s.developerId === dev._id.toString()).reduce((sum, s) => sum + (s.sales || 0), 0)}</p>
-                  </div>
-                  <div class="text-center">
-                    <p class="text-xs text-slate-500">Earned</p>
-                    <p class="text-lg font-bold text-purple-400">$${(marketScripts.filter(s => s.developerId === dev._id.toString()).reduce((sum, s) => sum + ((s.sales || 0) * s.price * 0.8), 0)).toFixed(0)}</p>
-                  </div>
-                </div>
-                
-                <button onclick="openAddScriptToMarketModal('${dev._id}')" class="w-full mt-3 px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 rounded-lg text-sm transition-all border border-blue-500/20">
-                  + Add Script
-                </button>
-              </div>
-            `).join('')}
-          </div>
-        `}
-      </div>
-
-      <!-- Marketplace Scripts -->
-      <div class="glass rounded-xl p-6">
-        <h2 class="text-lg font-semibold mb-4 flex items-center gap-2">
-          <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
-          </svg>
-          Scripts on Sale (${marketScripts.length})
-        </h2>
-        
-        ${marketScripts.length === 0 ? `
-          <div class="text-center py-12 text-slate-500">
-            <svg class="w-20 h-20 mx-auto mb-4 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
-            </svg>
-            <p class="text-lg font-semibold mb-2">No scripts on marketplace yet</p>
-            <p class="text-sm">Add developers and upload scripts to start selling!</p>
-          </div>
-        ` : `
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            ${marketScripts.map(script => {
-              const dev = devMap[script.developerId] || { name: 'Unknown', email: '' };
-              const rating = script.rating || 0;
-              const reviews = script.reviews || 0;
-              
-              return `
-                <div class="glass rounded-lg p-5 border border-slate-700 hover:border-emerald-500/30 transition-all group">
-                  <div class="flex items-start justify-between mb-3">
-                    <div class="flex-1">
-                      <h3 class="font-bold text-white mb-1">${script.name}</h3>
-                      <p class="text-xs text-slate-500">by ${dev.name}</p>
-                    </div>
-                    <div class="text-right">
-                      <p class="text-2xl font-bold text-emerald-400">$${script.price.toFixed(2)}</p>
-                    </div>
-                  </div>
-                  
-                  <p class="text-sm text-slate-400 mb-3 line-clamp-2">${script.description || 'No description'}</p>
-                  
-                  <div class="flex items-center gap-2 mb-3">
-                    <div class="flex items-center gap-1">
-                      ${Array.from({length: 5}, (_, i) => i < rating ? '⭐' : '☆').join('')}
-                    </div>
-                    <span class="text-xs text-slate-500">(${reviews} reviews)</span>
-                  </div>
-                  
-                  <div class="grid grid-cols-2 gap-2 mb-3">
-                    <div class="bg-slate-900/50 rounded p-2 text-center">
-                      <p class="text-xs text-slate-500">Sales</p>
-                      <p class="text-sm font-bold text-blue-400">${script.sales || 0}</p>
-                    </div>
-                    <div class="bg-slate-900/50 rounded p-2 text-center">
-                      <p class="text-xs text-slate-500">Revenue</p>
-                      <p class="text-sm font-bold text-purple-400">$${((script.sales || 0) * script.price).toFixed(0)}</p>
-                    </div>
-                  </div>
-                  
-                  <div class="flex gap-2">
-                    <button onclick="viewMarketScript('${script._id}')" class="flex-1 px-3 py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 rounded-lg text-sm transition-all border border-blue-500/20">
-                      View
-                    </button>
-                    <button onclick="deleteMarketScript('${script._id}')" class="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg text-sm transition-all border border-red-500/20">
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        `}
-      </div>
-    </div>
-
-    <!-- Add Developer Modal -->
-    <div id="addDeveloperModal" class="modal">
-      <div class="modal-content" style="max-width: 500px;">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-xl font-bold">Add Developer</h3>
-          <button onclick="closeModal('addDeveloperModal')" class="text-slate-400 hover:text-white">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-        
-        <form onsubmit="addDeveloper(event)" class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Developer Name *</label>
-            <input type="text" name="name" required class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white" placeholder="John Doe">
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Email *</label>
-            <input type="email" name="email" required class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white" placeholder="john@example.com">
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">PayPal Email (for payouts)</label>
-            <input type="email" name="paypal" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white" placeholder="paypal@example.com">
-          </div>
-          
-          <div class="flex gap-3 pt-4">
-            <button type="button" onclick="closeModal('addDeveloperModal')" class="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-all">
-              Cancel
-            </button>
-            <button type="submit" class="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg transition-all">
-              Add Developer
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Add Script to Market Modal -->
-    <div id="addScriptModal" class="modal">
-      <div class="modal-content" style="max-width: 600px;">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-xl font-bold">Add Script to Marketplace</h3>
-          <button onclick="closeModal('addScriptModal')" class="text-slate-400 hover:text-white">
-            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
-        
-        <form onsubmit="addScriptToMarket(event)" class="space-y-4">
-          <input type="hidden" name="developerId" id="scriptDeveloperId">
-          
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Script Name *</label>
-            <input type="text" name="name" required class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white" placeholder="ESP Hack Pro">
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Description</label>
-            <textarea name="description" rows="3" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white" placeholder="Amazing ESP features..."></textarea>
-          </div>
-          
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-2">Price ($) *</label>
-              <input type="number" name="price" required step="0.01" min="0.01" class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white" placeholder="2.99">
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-300 mb-2">Commission (%)</label>
-              <input type="number" name="commission" value="20" readonly class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-slate-400" disabled>
-            </div>
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Lua Code *</label>
-            <textarea name="code" rows="8" required class="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-4 py-2 text-white font-mono text-sm" placeholder="print('Hello World')"></textarea>
-          </div>
-          
-          <div class="flex gap-3 pt-4">
-            <button type="button" onclick="closeModal('addScriptModal')" class="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-all">
-              Cancel
-            </button>
-            <button type="submit" class="flex-1 px-4 py-2 bg-gradient-to-r from-emerald-600 to-blue-600 hover:from-emerald-700 hover:to-blue-700 rounded-lg transition-all">
-              Add to Marketplace
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <script>
-      function openAddDeveloperModal() {
-        document.getElementById('addDeveloperModal').style.display = 'flex';
-      }
-      
-      function openAddScriptToMarketModal(developerId) {
-        document.getElementById('scriptDeveloperId').value = developerId;
-        document.getElementById('addScriptModal').style.display = 'flex';
-      }
-      
-      function closeModal(modalId) {
-        document.getElementById(modalId).style.display = 'none';
-      }
-      
-      async function addDeveloper(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        
-        try {
-          const response = await fetch('/admin/marketplace/add-developer?pass=${pass}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: formData.get('name'),
-              email: formData.get('email'),
-              paypal: formData.get('paypal')
-            })
-          });
-          
-          const result = await response.json();
-          if (result.success) {
-            alert('✅ Developer added!');
-            location.reload();
-          } else {
-            alert('❌ Error: ' + (result.error || 'Unknown'));
-          }
-        } catch (error) {
-          alert('❌ Error: ' + error.message);
-        }
-      }
-      
-      async function addScriptToMarket(e) {
-        e.preventDefault();
-        const formData = new FormData(e.target);
-        
-        try {
-          const response = await fetch('/admin/marketplace/add-script?pass=${pass}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              developerId: formData.get('developerId'),
-              name: formData.get('name'),
-              description: formData.get('description'),
-              price: parseFloat(formData.get('price')),
-              code: formData.get('code')
-            })
-          });
-          
-          const result = await response.json();
-          if (result.success) {
-            alert('✅ Script added to marketplace!');
-            location.reload();
-          } else {
-            alert('❌ Error: ' + (result.error || 'Unknown'));
-          }
-        } catch (error) {
-          alert('❌ Error: ' + error.message);
-        }
-      }
-      
-      async function deleteMarketScript(id) {
-        if (!confirm('Delete this script from marketplace?')) return;
-        
-        try {
-          const response = await fetch(\`/admin/marketplace/delete-script/\${id}?pass=${pass}\`, {
-            method: 'DELETE'
-          });
-          
-          const result = await response.json();
-          if (result.success) {
-            alert('✅ Script deleted!');
-            location.reload();
-          } else {
-            alert('❌ Error: ' + (result.error || 'Unknown'));
-          }
-        } catch (error) {
-          alert('❌ Error: ' + error.message);
-        }
-      }
-      
-      function viewMarketScript(id) {
-        // TODO: Show script details modal
-        alert('View script details - coming soon!');
-      }
-    </script>
   `;
 }
 
@@ -3767,19 +3148,6 @@ function renderCheckpointStep(checkpoint, currentStep, totalSteps) {
         <p class="text-slate-400">${checkpoint.name}</p>
       </div>
 
-      <!-- Google AdSense - Top Banner -->
-      <div class="glass rounded-xl p-4 text-center">
-        <p class="text-xs text-slate-500 mb-2">Advertisement</p>
-        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9411126747085522" crossorigin="anonymous"></script>
-        <ins class="adsbygoogle"
-             style="display:block"
-             data-ad-client="ca-pub-9411126747085522"
-             data-ad-slot="auto"
-             data-ad-format="auto"
-             data-full-width-responsive="true"></ins>
-        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-      </div>
-
       <!-- Progress Bar -->
       <div class="glass rounded-xl p-4">
         <div class="flex items-center justify-between mb-2">
@@ -3832,19 +3200,6 @@ function renderCheckpointStep(checkpoint, currentStep, totalSteps) {
               <p class="text-xs text-slate-400 mt-1">seconds</p>
             </div>
           </div>
-        </div>
-
-        <!-- Google AdSense - Before Submit -->
-        <div class="mt-6 glass rounded-xl p-4 text-center">
-          <p class="text-xs text-slate-500 mb-2">Advertisement</p>
-          <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9411126747085522" crossorigin="anonymous"></script>
-          <ins class="adsbygoogle"
-               style="display:block"
-               data-ad-client="ca-pub-9411126747085522"
-               data-ad-slot="auto"
-               data-ad-format="auto"
-               data-full-width-responsive="true"></ins>
-          <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
         </div>
 
         <!-- Submit -->
@@ -4178,19 +3533,6 @@ async function renderWorkinkStep() {
           </div>
         </div>
         
-        <!-- Google AdSense - Before Work.ink -->
-        <div class="glass rounded-xl p-4 text-center">
-          <p class="text-xs text-slate-500 mb-2">Advertisement</p>
-          <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9411126747085522" crossorigin="anonymous"></script>
-          <ins class="adsbygoogle"
-               style="display:block"
-               data-ad-client="ca-pub-9411126747085522"
-               data-ad-slot="auto"
-               data-ad-format="auto"
-               data-full-width-responsive="true"></ins>
-          <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-        </div>
-        
         <a href="${providerLink}" target="_blank" class="inline-block w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 py-4 rounded-xl font-semibold shadow-lg shadow-blue-500/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] text-white">
           Open ${providerName} Verification
         </a>
@@ -4435,7 +3777,7 @@ app.get("/check", async (req, res) => {
     result = { valid: true };
   }
 
-  const logEntry = {
+  await logsCollection.insertOne({
     at: new Date(),
     key: realKey,
     ok: result.valid,
@@ -4443,24 +3785,7 @@ app.get("/check", async (req, res) => {
     hwid,
     userId,
     username,
-  };
-  
-  await logsCollection.insertOne(logEntry);
-  
-  // Broadcast to live console
-  if (typeof broadcastToConsole === 'function') {
-    broadcastToConsole({
-      type: 'check',
-      timestamp: logEntry.at,
-      status: result.valid ? 'success' : 'error',
-      data: {
-        key: realKey,
-        reason: result.reason,
-        username: username,
-        userId: userId
-      }
-    });
-  }
+  });
 
   // Clean old logs (keep last 300)
   const count = await logsCollection.countDocuments();
@@ -4545,10 +3870,6 @@ app.get("/admin", requireAdmin, async (req, res) => {
     pageContent = await renderSettingsPage(pass);
   } else if (page === "analytics") {
     pageContent = await renderAnalyticsPage(pass);
-  } else if (page === "console") {
-    pageContent = renderLiveConsolePage(pass);
-  } else if (page === "marketplace") {
-    pageContent = await renderMarketplacePage(pass);
   } else {
     // За замовчуванням: overview
     pageContent = await renderOverviewPage(pass, rangeDays, clicks, checkpoints, totalKeys, keysGenerated, keysUsed, scriptExecutions, totalChecks, list);
@@ -4721,18 +4042,6 @@ app.get("/admin", requireAdmin, async (req, res) => {
           </svg>
           Analytics
         </a>
-        <a href="/admin?pass=${pass}&page=console" class="sidebar-item ${req.query.page === 'console' ? 'active' : ''}">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-          </svg>
-          Live Console
-        </a>
-        <a href="/admin?pass=${pass}&page=marketplace" class="sidebar-item ${req.query.page === 'marketplace' ? 'active' : ''}">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
-          </svg>
-          Marketplace
-        </a>
       </div>
       
       <div class="pt-4 mt-auto border-t border-slate-800/50">
@@ -4844,7 +4153,7 @@ app.post("/admin/clear-all", requireAdmin, async (req, res) => {
 // Save settings
 app.post("/admin/settings/save", requireAdmin, async (req, res) => {
   try {
-    const { youtubeChannel, discordWebhook, adsenseId } = req.body;
+    const { youtubeChannel, discordWebhook } = req.body;
     
     await settingsCollection.updateOne(
       { _id: "global" },
@@ -4852,7 +4161,6 @@ app.post("/admin/settings/save", requireAdmin, async (req, res) => {
         $set: {
           youtubeChannel: youtubeChannel || "",
           discordWebhook: discordWebhook || "",
-          adsenseId: adsenseId || "ca-pub-9411126747085522",
           updatedAt: new Date()
         }
       },
@@ -5381,79 +4689,6 @@ app.post("/admin/scripts/delete", requireAdmin, async (req, res) => {
   }
 });
 
-// ===================== MARKETPLACE API =====================
-
-// Add developer
-app.post("/admin/marketplace/add-developer", requireAdmin, async (req, res) => {
-  try {
-    const { name, email, paypal } = req.body;
-    
-    const developer = {
-      name,
-      email,
-      paypal: paypal || email,
-      balance: 0,
-      totalEarned: 0,
-      scriptsCount: 0,
-      createdAt: new Date()
-    };
-    
-    await developersCollection.insertOne(developer);
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Add script to marketplace
-app.post("/admin/marketplace/add-script", requireAdmin, async (req, res) => {
-  try {
-    const { developerId, name, description, price, code } = req.body;
-    
-    const marketScript = {
-      developerId,
-      name,
-      description: description || '',
-      price: parseFloat(price),
-      code,
-      sales: 0,
-      rating: 0,
-      reviews: 0,
-      commission: 20, // 20% platform commission
-      enabled: true,
-      createdAt: new Date()
-    };
-    
-    await marketplaceCollection.insertOne(marketScript);
-    
-    // Update developer stats
-    await developersCollection.updateOne(
-      { _id: new (await import("mongodb")).ObjectId(developerId) },
-      { $inc: { scriptsCount: 1 } }
-    );
-    
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// Delete script from marketplace
-app.delete("/admin/marketplace/delete-script/:id", requireAdmin, async (req, res) => {
-  try {
-    const { ObjectId } = await import("mongodb");
-    const result = await marketplaceCollection.deleteOne({ _id: new ObjectId(req.params.id) });
-    
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ success: false, error: 'Script not found' });
-    }
-    
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
 // Public endpoint: Get script for loadstring
 app.get("/script/:slug", async (req, res) => {
   const { slug } = req.params;
@@ -5838,66 +5073,12 @@ end)()`;
 
 const PORT = process.env.PORT || 3000;
 
-// ===================== WEBSOCKET FOR LIVE CONSOLE =====================
-let wss;
-const wsClients = new Set();
-
-function broadcastToConsole(event) {
-  const message = JSON.stringify(event);
-  wsClients.forEach(client => {
-    if (client.readyState === 1) { // OPEN
-      try {
-        client.send(message);
-      } catch (e) {
-        console.error('WS send error:', e);
-      }
-    }
-  });
-}
-
 // Connect to MongoDB and start server
 connectDB().then(() => {
-  const server = app.listen(PORT, () => {
+app.listen(PORT, () => {
     console.log("🚀 Server started on port " + PORT);
     console.log("📊 MongoDB database: key_management");
   });
-  
-  // WebSocket server for live console
-  wss = new WebSocketServer({ server });
-  
-  wss.on('connection', (ws) => {
-    console.log('📡 Live Console connected');
-    wsClients.add(ws);
-    
-    // Send recent logs on connect
-    logsCollection.find().sort({ at: -1 }).limit(20).toArray().then(logs => {
-      logs.reverse().forEach(log => {
-        ws.send(JSON.stringify({
-          type: 'log',
-          timestamp: log.at,
-          action: 'check',
-          status: log.ok ? 'success' : 'error',
-          data: {
-            key: log.key,
-            reason: log.reason,
-            username: log.username
-          }
-        }));
-      });
-    });
-    
-    ws.on('close', () => {
-      console.log('📡 Live Console disconnected');
-      wsClients.delete(ws);
-    });
-    
-    ws.on('error', (err) => {
-      console.error('WS error:', err);
-      wsClients.delete(ws);
-    });
-  });
-  
-  console.log('📡 WebSocket server ready');
 }).catch(error => {
   console.error("Failed to start server:", error);
   process.exit(1);
