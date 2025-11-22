@@ -4,6 +4,7 @@
 import express from "express";
 import crypto from "crypto";
 import { MongoClient } from "mongodb";
+import { WebSocketServer } from "ws";
 
 const app = express();
 app.use(express.json());
@@ -2798,6 +2799,221 @@ async function renderAnalyticsPage(pass) {
   `;
 }
 
+// ===================== LIVE CONSOLE PAGE =====================
+function renderLiveConsolePage(pass) {
+  return `
+    <header class="glass border-b border-slate-800/50 px-6 py-5 sticky top-0 z-10">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold mb-1">📺 Live Console</h1>
+          <p class="text-sm text-slate-400">Real-time activity monitoring</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800/50">
+            <span id="ws-status" class="w-2 h-2 rounded-full bg-slate-500"></span>
+            <span id="ws-text" class="text-xs text-slate-400">Connecting...</span>
+          </div>
+          <button onclick="clearConsole()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors text-sm">
+            Clear
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <div class="p-6">
+      <div class="glass rounded-xl p-4" style="height: calc(100vh - 220px); overflow-y: auto;" id="console-container">
+        <div id="console-logs" class="space-y-2 font-mono text-sm">
+          <div class="text-slate-500 text-center py-8">
+            Waiting for events...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      #console-container {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+      }
+      #console-container::-webkit-scrollbar {
+        width: 8px;
+      }
+      #console-container::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #console-container::-webkit-scrollbar-thumb {
+        background: rgba(148, 163, 184, 0.3);
+        border-radius: 4px;
+      }
+      .console-entry {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border-left: 3px solid;
+        background: rgba(0, 0, 0, 0.2);
+        animation: slideIn 0.3s ease-out;
+      }
+      .console-success {
+        border-color: #10b981;
+        background: rgba(16, 185, 129, 0.05);
+      }
+      .console-error {
+        border-color: #ef4444;
+        background: rgba(239, 68, 68, 0.05);
+      }
+      .console-info {
+        border-color: #3b82f6;
+        background: rgba(59, 130, 246, 0.05);
+      }
+      @keyframes slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+
+    <script>
+      let ws = null;
+      let autoScroll = true;
+      const maxLogs = 100;
+      
+      function connectWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = protocol + '//' + window.location.host;
+        
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => {
+          console.log('WebSocket connected');
+          document.getElementById('ws-status').className = 'w-2 h-2 rounded-full bg-emerald-500 animate-pulse';
+          document.getElementById('ws-text').textContent = 'Connected';
+        };
+        
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            addLogEntry(data);
+          } catch (e) {
+            console.error('Failed to parse message:', e);
+          }
+        };
+        
+        ws.onerror = (error) => {
+          console.error('WebSocket error:', error);
+          document.getElementById('ws-status').className = 'w-2 h-2 rounded-full bg-red-500';
+          document.getElementById('ws-text').textContent = 'Error';
+        };
+        
+        ws.onclose = () => {
+          console.log('WebSocket closed, reconnecting...');
+          document.getElementById('ws-status').className = 'w-2 h-2 rounded-full bg-amber-500';
+          document.getElementById('ws-text').textContent = 'Reconnecting...';
+          setTimeout(connectWebSocket, 3000);
+        };
+      }
+      
+      function addLogEntry(data) {
+        const container = document.getElementById('console-logs');
+        const entries = container.children;
+        
+        // Remove placeholder
+        if (entries.length === 1 && entries[0].textContent.includes('Waiting')) {
+          container.innerHTML = '';
+        }
+        
+        // Remove old entries if too many
+        while (entries.length >= maxLogs) {
+          container.removeChild(entries[0]);
+        }
+        
+        const timestamp = new Date(data.timestamp).toLocaleTimeString('en-US', {
+          hour12: false,
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+        
+        let statusClass = 'console-info';
+        let statusIcon = '📡';
+        let statusText = 'INFO';
+        
+        if (data.status === 'success') {
+          statusClass = 'console-success';
+          statusIcon = '✅';
+          statusText = 'SUCCESS';
+        } else if (data.status === 'error') {
+          statusClass = 'console-error';
+          statusIcon = '❌';
+          statusText = 'ERROR';
+        }
+        
+        let message = '';
+        if (data.type === 'check') {
+          if (data.status === 'success') {
+            message = \`Key <span style="color: #60a5fa">\${data.data.key}</span> validated successfully\`;
+            if (data.data.username) {
+              message += \` by <span style="color: #a78bfa">\${data.data.username}</span>\`;
+            }
+          } else {
+            message = \`Key check failed: <span style="color: #f87171">\${data.data.reason || 'unknown'}</span>\`;
+            if (data.data.key) {
+              message += \` (key: \${data.data.key})\`;
+            }
+          }
+        } else if (data.type === 'log') {
+          message = JSON.stringify(data.data);
+        } else {
+          message = \`\${data.type}: \${JSON.stringify(data.data)}\`;
+        }
+        
+        const entry = document.createElement('div');
+        entry.className = \`console-entry \${statusClass}\`;
+        entry.innerHTML = \`
+          <div class="flex items-start gap-3">
+            <span class="text-lg">\${statusIcon}</span>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-xs text-slate-500">\${timestamp}</span>
+                <span class="px-2 py-0.5 text-xs rounded \${statusClass === 'console-success' ? 'bg-emerald-500/20 text-emerald-300' : statusClass === 'console-error' ? 'bg-red-500/20 text-red-300' : 'bg-blue-500/20 text-blue-300'}">\${statusText}</span>
+              </div>
+              <div class="text-sm text-slate-300">\${message}</div>
+            </div>
+          </div>
+        \`;
+        
+        container.appendChild(entry);
+        
+        // Auto-scroll to bottom
+        if (autoScroll) {
+          const consoleContainer = document.getElementById('console-container');
+          consoleContainer.scrollTop = consoleContainer.scrollHeight;
+        }
+      }
+      
+      function clearConsole() {
+        document.getElementById('console-logs').innerHTML = \`
+          <div class="text-slate-500 text-center py-8">
+            Console cleared. Waiting for events...
+          </div>
+        \`;
+      }
+      
+      // Detect manual scroll (disable auto-scroll)
+      document.getElementById('console-container').addEventListener('scroll', (e) => {
+        const el = e.target;
+        autoScroll = (el.scrollHeight - el.scrollTop - el.clientHeight) < 50;
+      });
+      
+      // Connect on page load
+      connectWebSocket();
+    </script>
+  `;
+}
+
 // ===================== HELPERS =====================
 
 async function addEvent(type, key) {
@@ -3777,7 +3993,7 @@ app.get("/check", async (req, res) => {
     result = { valid: true };
   }
 
-  await logsCollection.insertOne({
+  const logEntry = {
     at: new Date(),
     key: realKey,
     ok: result.valid,
@@ -3785,7 +4001,24 @@ app.get("/check", async (req, res) => {
     hwid,
     userId,
     username,
-  });
+  };
+  
+  await logsCollection.insertOne(logEntry);
+  
+  // Broadcast to live console
+  if (typeof broadcastToConsole === 'function') {
+    broadcastToConsole({
+      type: 'check',
+      timestamp: logEntry.at,
+      status: result.valid ? 'success' : 'error',
+      data: {
+        key: realKey,
+        reason: result.reason,
+        username: username,
+        userId: userId
+      }
+    });
+  }
 
   // Clean old logs (keep last 300)
   const count = await logsCollection.countDocuments();
@@ -3870,6 +4103,8 @@ app.get("/admin", requireAdmin, async (req, res) => {
     pageContent = await renderSettingsPage(pass);
   } else if (page === "analytics") {
     pageContent = await renderAnalyticsPage(pass);
+  } else if (page === "console") {
+    pageContent = renderLiveConsolePage(pass);
   } else {
     // За замовчуванням: overview
     pageContent = await renderOverviewPage(pass, rangeDays, clicks, checkpoints, totalKeys, keysGenerated, keysUsed, scriptExecutions, totalChecks, list);
@@ -4041,6 +4276,12 @@ app.get("/admin", requireAdmin, async (req, res) => {
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
           Analytics
+        </a>
+        <a href="/admin?pass=${pass}&page=console" class="sidebar-item ${req.query.page === 'console' ? 'active' : ''}">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+          </svg>
+          Live Console
         </a>
       </div>
       
@@ -5073,12 +5314,66 @@ end)()`;
 
 const PORT = process.env.PORT || 3000;
 
+// ===================== WEBSOCKET FOR LIVE CONSOLE =====================
+let wss;
+const wsClients = new Set();
+
+function broadcastToConsole(event) {
+  const message = JSON.stringify(event);
+  wsClients.forEach(client => {
+    if (client.readyState === 1) { // OPEN
+      try {
+        client.send(message);
+      } catch (e) {
+        console.error('WS send error:', e);
+      }
+    }
+  });
+}
+
 // Connect to MongoDB and start server
 connectDB().then(() => {
-app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log("🚀 Server started on port " + PORT);
     console.log("📊 MongoDB database: key_management");
   });
+  
+  // WebSocket server for live console
+  wss = new WebSocketServer({ server });
+  
+  wss.on('connection', (ws) => {
+    console.log('📡 Live Console connected');
+    wsClients.add(ws);
+    
+    // Send recent logs on connect
+    logsCollection.find().sort({ at: -1 }).limit(20).toArray().then(logs => {
+      logs.reverse().forEach(log => {
+        ws.send(JSON.stringify({
+          type: 'log',
+          timestamp: log.at,
+          action: 'check',
+          status: log.ok ? 'success' : 'error',
+          data: {
+            key: log.key,
+            reason: log.reason,
+            username: log.username
+          }
+        }));
+      });
+    });
+    
+    ws.on('close', () => {
+      console.log('📡 Live Console disconnected');
+      wsClients.delete(ws);
+    });
+    
+    ws.on('error', (err) => {
+      console.error('WS error:', err);
+      wsClients.delete(ws);
+    });
+  });
+  
+  console.log('📡 WebSocket server ready');
 }).catch(error => {
   console.error("Failed to start server:", error);
   process.exit(1);
