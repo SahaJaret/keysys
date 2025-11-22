@@ -1020,9 +1020,24 @@ DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL || ''}
   `;
 }
 
-async function renderMonetizationPage(pass) {
+async function renderMonetizationPage(pass, req) {
   const providers = await monetizationProvidersCollection.find().toArray();
   const activeProvider = providers.find(p => p.isActive);
+  
+  // Get dynamic base URL for returnUrl display
+  const dynamicBaseUrl = req ? getRequestUrl(req) : BASE_URL;
+  
+  // Helper function to get dynamic returnUrl for each provider
+  const getReturnUrl = (provider) => {
+    if (provider.type === 'workink') {
+      return `${dynamicBaseUrl}/monetization-callback/workink`;
+    } else if (provider.type === 'lootlabs') {
+      return `${dynamicBaseUrl}/monetization-callback/lootlabs`;
+    } else if (provider.type === 'linkvertise') {
+      return `${dynamicBaseUrl}/monetization-callback/linkvertise`;
+    }
+    return '';
+  };
   
   const providerIcons = {
     workink: '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>',
@@ -1036,7 +1051,9 @@ async function renderMonetizationPage(pass) {
     linkvertise: 'from-blue-500 to-cyan-600'
   };
 
-  const providerCards = providers.map(provider => `
+  const providerCards = providers.map(provider => {
+    const returnUrl = getReturnUrl(provider);
+    return `
     <div class="glass rounded-xl p-6 border ${provider.isActive ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-slate-700/50'}">
       <div class="flex items-start gap-4 mb-4">
         <div class="w-14 h-14 rounded-xl bg-gradient-to-br ${providerColors[provider.type] || 'from-slate-500 to-slate-600'} flex items-center justify-center shadow-lg">
@@ -1116,14 +1133,15 @@ async function renderMonetizationPage(pass) {
         ` : ''}
         <div class="flex items-center gap-2 text-xs">
           <span class="text-slate-500">Callback URL:</span>
-          <code class="flex-1 glass rounded px-2 py-1 text-slate-300 truncate">${provider.config?.returnUrl || ''}</code>
-          <button onclick="navigator.clipboard.writeText('${provider.config?.returnUrl || ''}')" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300">
+          <code class="flex-1 glass rounded px-2 py-1 text-slate-300 truncate">${returnUrl}</code>
+          <button onclick="navigator.clipboard.writeText('${returnUrl}')" class="px-2 py-1 bg-slate-700 hover:bg-slate-600 rounded text-slate-300">
             Copy
           </button>
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   return `
     <header class="glass border-b border-slate-800/50 px-6 py-5 sticky top-0 z-10">
@@ -1240,7 +1258,7 @@ async function renderMonetizationPage(pass) {
     </div>
 
     <script>
-      const providers = ${JSON.stringify(providers)};
+      const providers = ${JSON.stringify(providers.map(p => ({ ...p, dynamicReturnUrl: getReturnUrl(p) })))};
 
       function editProvider(providerId) {
         const provider = providers.find(p => p.id === providerId);
@@ -1305,7 +1323,7 @@ async function renderMonetizationPage(pass) {
               <div class="p-3 glass rounded-lg bg-blue-500/5 border border-blue-500/20">
                 <p class="text-xs text-slate-400">
                   <strong>Return URL (set in Work.ink settings):</strong><br>
-                  <code class="text-blue-300">\${provider.config?.returnUrl || 'Not configured'}</code>
+                  <code class="text-blue-300">\${provider.dynamicReturnUrl || 'Not configured'}</code>
                 </p>
               </div>
             </div>
@@ -1373,7 +1391,7 @@ async function renderMonetizationPage(pass) {
               <div class="p-3 glass rounded-lg bg-blue-500/5 border border-blue-500/20">
                 <p class="text-xs text-slate-400">
                   <strong>Callback URL (automatically configured):</strong><br>
-                  <code class="text-blue-300">\${provider.config?.returnUrl || ''}</code>
+                  <code class="text-blue-300">\${provider.dynamicReturnUrl || ''}</code>
                 </p>
                 <p class="text-xs text-emerald-400 mt-2">
                   ✨ When using API mode, callback URL is set automatically when creating the link!
@@ -1441,7 +1459,7 @@ async function renderMonetizationPage(pass) {
               <div class="p-3 glass rounded-lg bg-blue-500/5 border border-blue-500/20">
                 <p class="text-xs text-slate-400">
                   <strong>Callback URL (set in Linkvertise):</strong><br>
-                  <code class="text-blue-300">\${provider.config?.returnUrl || ''}</code>
+                  <code class="text-blue-300">\${provider.dynamicReturnUrl || ''}</code>
                 </p>
               </div>
             </div>
@@ -4325,7 +4343,7 @@ app.get("/admin", requireAdmin, async (req, res) => {
   } else if (page === "scripts") {
     pageContent = await renderScriptsPage(pass, q);
   } else if (page === "monetization") {
-    pageContent = await renderMonetizationPage(pass);
+    pageContent = await renderMonetizationPage(pass, req);
   } else if (page === "services") {
     pageContent = await renderServicesPage(pass);
   } else if (page === "webhooks") {
