@@ -2940,13 +2940,43 @@ async function createWorkinkLink(provider, req) {
     if (!createLinkResponse.ok) {
       const errorText = await createLinkResponse.text();
       console.error('❌ Work.ink create link error:', createLinkResponse.status, errorText);
-      return provider.config?.linkUrl || ''; // Fallback to static link
+      let errorMessage = `Work.ink API error (${createLinkResponse.status})`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        if (errorJson.message) {
+          errorMessage = errorJson.message;
+        }
+      } catch (e) {
+        // Not JSON, use raw text
+        if (errorText && errorText.length < 200) {
+          errorMessage = errorText;
+        }
+      }
+      throw new Error(errorMessage);
     }
     
-    const createLinkResult = await createLinkResponse.json();
+    let createLinkResult;
+    try {
+      createLinkResult = await createLinkResponse.json();
+    } catch (parseError) {
+      const responseText = await createLinkResponse.text();
+      console.error('❌ Work.ink: Failed to parse JSON response:', responseText);
+      throw new Error(`Work.ink API returned invalid JSON: ${responseText.substring(0, 200)}`);
+    }
+    
     console.log('📦 API Response:', JSON.stringify(createLinkResult, null, 2));
     
-    if (createLinkResult.url) {
+    // Check for error in response
+    if (createLinkResult.error) {
+      const errorMsg = createLinkResult.message || createLinkResult.error || 'Unknown error';
+      console.error('❌ Work.ink API error:', errorMsg);
+      throw new Error(`Work.ink API: ${errorMsg}`);
+    }
+    
+    // Check for URL in response (can be 'url' or 'link' field)
+    const linkUrl = createLinkResult.url || createLinkResult.link || createLinkResult.short_url;
+    
+    if (linkUrl) {
       // Store session token temporarily (expires in 1 hour)
       await trafficCollection.insertOne({
         type: 'workink_session',
@@ -2954,19 +2984,22 @@ async function createWorkinkLink(provider, req) {
         createdAt: new Date(),
         expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
         used: false,
-        workinkLinkId: createLinkResult.id
+        workinkLinkId: createLinkResult.id || null
       });
       
       console.log('✅ Work.ink link created with session:', sessionToken);
-      console.log('🔗 Generated link:', createLinkResult.url);
-      return createLinkResult.url;
+      console.log('🔗 Generated link:', linkUrl);
+      return linkUrl;
     } else {
-      console.error('❌ Work.ink: Unexpected response format:', createLinkResult);
-      return provider.config?.linkUrl || '';
+      // Log full response for debugging
+      console.error('❌ Work.ink: No URL in response. Full response:', JSON.stringify(createLinkResult, null, 2));
+      const errorMsg = createLinkResult.message || createLinkResult.error || 'Response missing URL field';
+      throw new Error(`Work.ink API: ${errorMsg}. Response: ${JSON.stringify(createLinkResult)}`);
     }
   } catch (error) {
     console.error('❌ Work.ink createLink error:', error);
-    return provider.config?.linkUrl || ''; // Fallback to static link
+    // Re-throw to let caller handle it
+    throw error;
   }
 }
 
@@ -3750,10 +3783,65 @@ app.get("/admin/test-provider/:providerId", requireAdmin, async (req, res) => {
       try {
         providerLink = await createWorkinkLink(provider, req);
         console.log('✅ Generated link:', providerLink);
+        if (!providerLink || providerLink === '') {
+          return res.send(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Test Provider - API Error</title>
+              <style>
+                body { font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff; text-align: center; }
+                .error { background: #330000; border: 2px solid #f00; padding: 20px; border-radius: 8px; display: inline-block; max-width: 600px; }
+                .info { background: #000; padding: 15px; margin: 10px 0; border-radius: 4px; text-align: left; }
+                a { color: #0ff; margin-top: 20px; display: block; }
+                pre { background: #000; padding: 10px; border-radius: 4px; overflow-x: auto; text-align: left; }
+              </style>
+            </head>
+            <body>
+              <div class="error">
+                <h1>❌ Failed to Generate Link</h1>
+                <p><strong>Provider:</strong> ${provider.name} (${provider.type})</p>
+                <div class="info">
+                  <p><strong>API Key:</strong> ✓ Set (${provider.config?.apiKey ? provider.config.apiKey.substring(0, 16) + '...' : 'N/A'})</p>
+                  <p><strong>Use API Key:</strong> Yes</p>
+                </div>
+                <p>Work.ink API returned an error. Check server logs for details.</p>
+                <p class="text-yellow-400">Possible issues:</p>
+                <ul class="text-left text-sm mt-2">
+                  <li>• Invalid API key</li>
+                  <li>• API rate limit exceeded</li>
+                  <li>• Work.ink API is down</li>
+                </ul>
+                <a href="/admin?pass=${req.query.pass || 'admin123'}&page=monetization">Go to Admin Panel →</a>
+              </div>
+            </body>
+            </html>
+          `);
+        }
       } catch (error) {
         console.error('❌ Error generating link:', error);
-        providerLink = provider.config?.linkUrl || '';
-        console.log('⚠️ Fallback to static link:', providerLink);
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Test Provider - Error</title>
+            <style>
+              body { font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff; text-align: center; }
+              .error { background: #330000; border: 2px solid #f00; padding: 20px; border-radius: 8px; display: inline-block; max-width: 600px; }
+              pre { background: #000; padding: 10px; border-radius: 4px; overflow-x: auto; text-align: left; }
+              a { color: #0ff; margin-top: 20px; display: block; }
+            </style>
+          </head>
+          <body>
+            <div class="error">
+              <h1>❌ Error Generating Link</h1>
+              <p><strong>Provider:</strong> ${provider.name}</p>
+              <pre>${error.message || 'Unknown error'}</pre>
+              <a href="/admin?pass=${req.query.pass || 'admin123'}&page=monetization">Go to Admin Panel →</a>
+            </div>
+          </body>
+          </html>
+        `);
       }
     } else {
       providerLink = provider.config?.linkUrl || '';
