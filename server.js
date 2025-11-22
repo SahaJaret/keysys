@@ -2591,6 +2591,21 @@ async function renderSettingsPage(pass) {
             </div>
             <p class="text-xs text-slate-400 mt-2">Notifications for new key generation</p>
           </div>
+
+          <div class="glass rounded-lg p-4 border border-slate-700/50 bg-gradient-to-br from-emerald-500/5 to-blue-500/5">
+            <div class="flex items-center gap-2 mb-2">
+              <label class="text-xs text-slate-400 uppercase tracking-wider">Google AdSense Publisher ID</label>
+              <span class="px-2 py-0.5 text-xs rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">💰 Monetization</span>
+            </div>
+            <div class="flex gap-2">
+              <input type="text" id="adsenseId" value="${settings.adsenseId || 'ca-pub-9411126747085522'}" placeholder="ca-pub-XXXXXXXXXXXXXXXX" class="flex-1 bg-slate-950/40 border border-slate-700 rounded-lg px-3 py-2 text-sm font-mono text-slate-300">
+              <button onclick="saveSettings()" class="px-4 py-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 rounded-lg text-sm font-medium border border-emerald-500/20">Save</button>
+            </div>
+            <p class="text-xs text-emerald-400/70 mt-2">💡 Your ads show on /get-key page. <strong>3 ads per user = 3x more profit!</strong></p>
+            <div class="mt-2 p-2 bg-slate-900/50 rounded text-xs text-slate-400">
+              <strong>Estimated earnings:</strong> $2-5 per 1000 keys (depends on country/ad quality) + Work.ink
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2653,12 +2668,13 @@ async function renderSettingsPage(pass) {
       async function saveSettings() {
         const youtubeChannel = document.getElementById('youtubeChannel').value;
         const discordWebhook = document.getElementById('discordWebhook').value;
+        const adsenseId = document.getElementById('adsenseId').value;
         
         try {
           const response = await fetch('/admin/settings/save?pass=${pass}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ youtubeChannel, discordWebhook })
+            body: JSON.stringify({ youtubeChannel, discordWebhook, adsenseId })
           });
           
           const result = await response.json();
@@ -3751,6 +3767,19 @@ function renderCheckpointStep(checkpoint, currentStep, totalSteps) {
         <p class="text-slate-400">${checkpoint.name}</p>
       </div>
 
+      <!-- Google AdSense - Top Banner -->
+      <div class="glass rounded-xl p-4 text-center">
+        <p class="text-xs text-slate-500 mb-2">Advertisement</p>
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9411126747085522" crossorigin="anonymous"></script>
+        <ins class="adsbygoogle"
+             style="display:block"
+             data-ad-client="ca-pub-9411126747085522"
+             data-ad-slot="auto"
+             data-ad-format="auto"
+             data-full-width-responsive="true"></ins>
+        <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+      </div>
+
       <!-- Progress Bar -->
       <div class="glass rounded-xl p-4">
         <div class="flex items-center justify-between mb-2">
@@ -3803,6 +3832,19 @@ function renderCheckpointStep(checkpoint, currentStep, totalSteps) {
               <p class="text-xs text-slate-400 mt-1">seconds</p>
             </div>
           </div>
+        </div>
+
+        <!-- Google AdSense - Before Submit -->
+        <div class="mt-6 glass rounded-xl p-4 text-center">
+          <p class="text-xs text-slate-500 mb-2">Advertisement</p>
+          <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9411126747085522" crossorigin="anonymous"></script>
+          <ins class="adsbygoogle"
+               style="display:block"
+               data-ad-client="ca-pub-9411126747085522"
+               data-ad-slot="auto"
+               data-ad-format="auto"
+               data-full-width-responsive="true"></ins>
+          <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
         </div>
 
         <!-- Submit -->
@@ -4134,6 +4176,19 @@ async function renderWorkinkStep() {
             </svg>
             <span>Keep this tab open during verification</span>
           </div>
+        </div>
+        
+        <!-- Google AdSense - Before Work.ink -->
+        <div class="glass rounded-xl p-4 text-center">
+          <p class="text-xs text-slate-500 mb-2">Advertisement</p>
+          <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9411126747085522" crossorigin="anonymous"></script>
+          <ins class="adsbygoogle"
+               style="display:block"
+               data-ad-client="ca-pub-9411126747085522"
+               data-ad-slot="auto"
+               data-ad-format="auto"
+               data-full-width-responsive="true"></ins>
+          <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
         </div>
         
         <a href="${providerLink}" target="_blank" class="inline-block w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 py-4 rounded-xl font-semibold shadow-lg shadow-blue-500/30 transition-all transform hover:scale-[1.02] active:scale-[0.98] text-white">
@@ -4789,7 +4844,7 @@ app.post("/admin/clear-all", requireAdmin, async (req, res) => {
 // Save settings
 app.post("/admin/settings/save", requireAdmin, async (req, res) => {
   try {
-    const { youtubeChannel, discordWebhook } = req.body;
+    const { youtubeChannel, discordWebhook, adsenseId } = req.body;
     
     await settingsCollection.updateOne(
       { _id: "global" },
@@ -4797,6 +4852,7 @@ app.post("/admin/settings/save", requireAdmin, async (req, res) => {
         $set: {
           youtubeChannel: youtubeChannel || "",
           discordWebhook: discordWebhook || "",
+          adsenseId: adsenseId || "ca-pub-9411126747085522",
           updatedAt: new Date()
         }
       },
