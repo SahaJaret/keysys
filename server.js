@@ -3013,6 +3013,79 @@ async function createLootlabsLink(provider, req) {
   }
 }
 
+// ===================== WORK.INK API =====================
+async function createWorkinkLink(provider, req) {
+  try {
+    const apiKey = provider.config?.apiKey;
+    
+    console.log('🔐 createWorkinkLink called');
+    console.log('🔍 API Key present:', !!apiKey, apiKey ? apiKey.substring(0, 16) + '...' : 'NO');
+    
+    if (!apiKey) {
+      console.error('❌ Work.ink: Missing API key');
+      return provider.config?.linkUrl || ''; // Fallback to static link
+    }
+    
+    // Generate unique session token for this user
+    const sessionToken = crypto.randomBytes(16).toString('hex');
+    console.log('🎫 Generated session token:', sessionToken);
+    
+    // Prepare returnUrl with session token - use dynamic URL based on request
+    // Work.ink will add its own token parameter, so we use session for our anti-bypass check
+    const requestUrl = req ? getRequestUrl(req) : BASE_URL;
+    const returnUrl = `${requestUrl}/monetization-callback/workink?session=${sessionToken}`;
+    console.log('🔗 Return URL (dynamic):', returnUrl);
+    
+    // Create link via Work.ink API
+    console.log('📡 Calling Work.ink API...');
+    const createLinkResponse = await fetch('https://dashboard.work.ink/_api/v1/link', {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        title: 'Key Verification',
+        destination: returnUrl,
+        link_description: 'Complete verification to get your access key'
+      })
+    });
+    
+    console.log('📡 API Response status:', createLinkResponse.status);
+    
+    if (!createLinkResponse.ok) {
+      const errorText = await createLinkResponse.text();
+      console.error('❌ Work.ink create link error:', createLinkResponse.status, errorText);
+      return provider.config?.linkUrl || ''; // Fallback to static link
+    }
+    
+    const createLinkResult = await createLinkResponse.json();
+    console.log('📦 API Response:', JSON.stringify(createLinkResult, null, 2));
+    
+    if (createLinkResult.url) {
+      // Store session token temporarily (expires in 1 hour)
+      await trafficCollection.insertOne({
+        type: 'workink_session',
+        sessionToken,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+        used: false,
+        workinkLinkId: createLinkResult.id
+      });
+      
+      console.log('✅ Work.ink link created with session:', sessionToken);
+      console.log('🔗 Generated link:', createLinkResult.url);
+      return createLinkResult.url;
+    } else {
+      console.error('❌ Work.ink: Unexpected response format:', createLinkResult);
+      return provider.config?.linkUrl || '';
+    }
+  } catch (error) {
+    console.error('❌ Work.ink createLink error:', error);
+    return provider.config?.linkUrl || ''; // Fallback to static link
+  }
+}
+
 // ===================== GEOLOCATION =====================
 async function getGeoLocation(ip) {
   // Skip local IPs
@@ -3625,6 +3698,9 @@ async function renderWorkinkStep(req) {
   if (activeProvider?.type === 'lootlabs' && activeProvider?.config?.useApiKey && activeProvider?.config?.apiKey) {
     // Dynamically create Lootlabs link via API
     providerLink = await createLootlabsLink(activeProvider, req);
+  } else if (activeProvider?.type === 'workink' && activeProvider?.config?.useApiKey && activeProvider?.config?.apiKey) {
+    // Dynamically create Work.ink link via API
+    providerLink = await createWorkinkLink(activeProvider, req);
   } else {
     // Use static link from config
     providerLink = activeProvider?.config?.linkUrl || WORKINK_LINK;
@@ -3787,6 +3863,18 @@ app.get("/test-provider", async (req, res) => {
         providerLink = activeProvider.config?.linkUrl || '';
         console.log('⚠️ Fallback to static link:', providerLink);
       }
+    } else if (activeProvider.type === 'workink' && activeProvider.config?.useApiKey && activeProvider.config?.apiKey) {
+      console.log('🔗 Generating Work.ink link via API...');
+      console.log('🔍 API Key present:', !!activeProvider.config?.apiKey);
+      try {
+        providerLink = await createWorkinkLink(activeProvider, req);
+        console.log('✅ Generated link:', providerLink);
+        console.log('🔍 Link length:', providerLink?.length || 0);
+      } catch (error) {
+        console.error('❌ Error generating link:', error);
+        providerLink = activeProvider.config?.linkUrl || '';
+        console.log('⚠️ Fallback to static link:', providerLink);
+      }
     } else {
       providerLink = activeProvider.config?.linkUrl || '';
       console.log('🔗 Using static link:', providerLink);
@@ -3872,8 +3960,32 @@ app.get("/monetization-callback/:providerId", async (req, res) => {
     let key, keyObj;
     
     if (providerId === "workink") {
-  const { token } = req.query;
-  if (!token) return res.status(400).send("No token");
+      const { token, session } = req.query;
+      
+      // Check if using API key mode (session-based validation for anti-bypass)
+      if (provider.config?.useApiKey && session) {
+        // Validate session token first
+        const sessionData = await trafficCollection.findOne({
+          type: 'workink_session',
+          sessionToken: session,
+          used: false,
+          expiresAt: { $gt: new Date() }
+        });
+        
+        if (!sessionData) {
+          return res.status(400).send("Invalid or expired session");
+        }
+        
+        // Mark session as used
+        await trafficCollection.updateOne(
+          { _id: sessionData._id },
+          { $set: { used: true } }
+        );
+        
+        console.log('✅ Work.ink session validated:', session);
+      }
+      
+      if (!token) return res.status(400).send("No token");
 
       // Check if key already exists
       const existingKey = await keysCollection.findOne({ fromMonetizationToken: token });
@@ -3883,7 +3995,7 @@ app.get("/monetization-callback/:providerId", async (req, res) => {
       }
 
       // Validate with Work.ink
-    const url = `https://work.ink/_api/v2/token/isValid/${token}?deleteToken=1&forbiddenOnFail=0`;
+      const url = `https://work.ink/_api/v2/token/isValid/${token}?deleteToken=1&forbiddenOnFail=0`;
       const fetchOptions = {
         method: 'GET',
         headers: {}
@@ -3891,34 +4003,32 @@ app.get("/monetization-callback/:providerId", async (req, res) => {
       
       // Add API key authentication if enabled
       if (provider.config?.useApiKey && provider.config?.apiKey) {
-        fetchOptions.headers['Authorization'] = `Bearer ${provider.config.apiKey}`;
-        // or use API key in different format depending on Work.ink docs:
-        // fetchOptions.headers['X-API-Key'] = provider.config.apiKey;
+        fetchOptions.headers['X-Api-Key'] = provider.config.apiKey;
       }
       
       const resp = await fetch(url, fetchOptions);
-    const data = await resp.json();
+      const data = await resp.json();
       
-    if (!data.valid) {
+      if (!data.valid) {
         return res.status(403).send("Token validation failed");
       }
 
       key = makeKey();
       const duration = provider.config?.keyDuration || 1;
       keyObj = {
-      key,
-      createdAt: new Date(),
+        key,
+        createdAt: new Date(),
         expiresAt: new Date(Date.now() + duration * 60 * 60 * 1000),
-      isActive: true,
-      usageCount: 0,
-      maxUsage: null,
+        isActive: true,
+        usageCount: 0,
+        maxUsage: null,
         source: providerId,
         fromMonetizationToken: token,
         provider: provider.name,
-      hwid: null,
-      robloxUserId: null,
-      robloxUsername: null,
-    };
+        hwid: null,
+        robloxUserId: null,
+        robloxUsername: null,
+      };
 
       res.setHeader("Set-Cookie", `monetization_token=${encodeURIComponent(token)}; Path=/; Max-Age=3600`);
       
