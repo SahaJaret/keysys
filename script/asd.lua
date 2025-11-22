@@ -1,23 +1,4 @@
 
--- 🔥 ENVIRONMENT ACCESS: JunkieCore is provided by Loader environment
--- Initialize JunkieProtected with config (from environment JunkieCore, not _G)
-
--- Debug: Check if JunkieCore is available
-if not JunkieCore then
-    error("JunkieCore not available in environment! Check Loader setup.", 0)
-end
-
-local config = {
-    api_key = "API_KEY_PLACEHOLDER",
-    provider = "Mixed",
-    service = "Default",
-    hash = "05133e4e567a5e49b8b07bccb0ac3a01"
-}
-
--- Initialize JunkieProtected (using JunkieCore from environment)
-local JunkieProtected = JunkieCore.initialize(config)
-config = nil
-
 local function _uskfurGeYE()
     -- 🌀 Load WindUI ONCE
     local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
@@ -228,17 +209,6 @@ local function _uskfurGeYE()
                 Color3.fromRGB(48, 167, 255),
                 Color3.fromRGB(231, 255, 47)
             )
-        },
-    
-        -- подключаем наш сервис сюда
-        KeySystem = {
-            Note = "Get link → open in browser → paste key here.",
-            API = {
-                {
-                    Type    = "vezunthub",
-                    BaseUrl = KEY_BACKEND,
-                },
-            },
         },
     })
     
@@ -1944,27 +1914,7 @@ local function _rubPFHDGdD()
   if __GamelistLoader then
       __GamelistLoader:Destroy()
   end
-    if false then
-      -- Use local JunkieProtected (initialized above)
-      if _G.SCRIPT_KEY and JunkieProtected.ValidateKey({Key=_G.SCRIPT_KEY}) == "valid" then
-            pcall(_uskfurGeYE)
-      else
-        -- Use local JunkieProtected (initialized above)
-        JunkieProtected.QuickStartUI({
-          provider="Mixed",
-          title="Script Access",
-          subtitle="Key Verification Required",
-          service="Default",
-          description="Please verify your key to continue",
-          onSuccess=function(result)
-                    pcall(_uskfurGeYE)
-          end,
-          onError=function(err) end
-        })
-    end
-  else
-        pcall(_uskfurGeYE)
-  end
+  pcall(_uskfurGeYE)
 end
 
 _rubPFHDGdD()
