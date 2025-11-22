@@ -2937,44 +2937,35 @@ async function createWorkinkLink(provider, req) {
     
     console.log('📡 API Response status:', createLinkResponse.status);
     
-    if (!createLinkResponse.ok) {
-      const errorText = await createLinkResponse.text();
-      console.error('❌ Work.ink create link error:', createLinkResponse.status, errorText);
-      let errorMessage = `Work.ink API error (${createLinkResponse.status})`;
-      try {
-        const errorJson = JSON.parse(errorText);
-        if (errorJson.message) {
-          errorMessage = errorJson.message;
-        }
-      } catch (e) {
-        // Not JSON, use raw text
-        if (errorText && errorText.length < 200) {
-          errorMessage = errorText;
-        }
-      }
-      throw new Error(errorMessage);
-    }
+    // Read response as text first to handle both success and error cases
+    const responseText = await createLinkResponse.text();
+    console.log('📦 API Response raw:', responseText.substring(0, 500));
     
     let createLinkResult;
     try {
-      createLinkResult = await createLinkResponse.json();
+      createLinkResult = JSON.parse(responseText);
     } catch (parseError) {
-      const responseText = await createLinkResponse.text();
-      console.error('❌ Work.ink: Failed to parse JSON response:', responseText);
+      console.error('❌ Work.ink: Failed to parse JSON response:', parseError);
       throw new Error(`Work.ink API returned invalid JSON: ${responseText.substring(0, 200)}`);
     }
     
-    console.log('📦 API Response:', JSON.stringify(createLinkResult, null, 2));
+    console.log('📦 API Response parsed:', JSON.stringify(createLinkResult, null, 2));
     
-    // Check for error in response
-    if (createLinkResult.error) {
-      const errorMsg = createLinkResult.message || createLinkResult.error || 'Unknown error';
+    // Check for error in response (even if status is 200)
+    if (createLinkResult.error === true || !createLinkResponse.ok) {
+      const errorMsg = createLinkResult.message || 'Unknown error';
       console.error('❌ Work.ink API error:', errorMsg);
       throw new Error(`Work.ink API: ${errorMsg}`);
     }
     
-    // Check for URL in response (can be 'url' or 'link' field)
-    const linkUrl = createLinkResult.url || createLinkResult.link || createLinkResult.short_url;
+    // Check for URL in response (can be in root or in response object)
+    const linkUrl = createLinkResult.url || 
+                    createLinkResult.response?.url || 
+                    createLinkResult.link || 
+                    createLinkResult.short_url;
+    
+    // Get ID from response object or root
+    const linkId = createLinkResult.id || createLinkResult.response?.id;
     
     if (linkUrl) {
       // Store session token temporarily (expires in 1 hour)
@@ -2984,7 +2975,7 @@ async function createWorkinkLink(provider, req) {
         createdAt: new Date(),
         expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
         used: false,
-        workinkLinkId: createLinkResult.id || null
+        workinkLinkId: linkId || null
       });
       
       console.log('✅ Work.ink link created with session:', sessionToken);
