@@ -3143,6 +3143,12 @@ app.get("/get-key", async (req, res) => {
   
   // If no checkpoints or completed all, go to monetization provider
   if (steps.length === 0 || currentStep >= steps.length) {
+    // DEBUG: Check active provider
+    const activeProvider = await monetizationProvidersCollection.findOne({ isActive: true });
+    console.log('🔍 Active Provider:', activeProvider?.name || 'NONE', 'Type:', activeProvider?.type);
+    console.log('🔍 Link URL:', activeProvider?.config?.linkUrl);
+    console.log('🔍 Use API:', activeProvider?.config?.useApiKey);
+    
     return res.send(await renderWorkinkStep());
   }
   
@@ -3631,6 +3637,51 @@ async function renderWorkinkStep() {
   </body></html>
   `;
 }
+
+// DEBUG endpoint to check providers
+app.get("/debug/providers", async (req, res) => {
+  const providers = await monetizationProvidersCollection.find().toArray();
+  const activeProvider = await monetizationProvidersCollection.findOne({ isActive: true });
+  
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Provider Debug</title>
+      <style>
+        body { font-family: monospace; padding: 20px; background: #1a1a1a; color: #fff; }
+        .provider { border: 2px solid #333; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .active { border-color: #0f0; background: #003300; }
+        .enabled { color: #0f0; }
+        .disabled { color: #f00; }
+        pre { background: #000; padding: 10px; border-radius: 4px; overflow-x: auto; }
+      </style>
+    </head>
+    <body>
+      <h1>🔍 Monetization Providers Debug</h1>
+      <p><strong>Active Provider:</strong> ${activeProvider ? `✅ ${activeProvider.name}` : '❌ NONE SET'}</p>
+      <hr>
+      ${providers.map(p => `
+        <div class="provider ${p.isActive ? 'active' : ''}">
+          <h2>${p.name} ${p.isActive ? '⭐ ACTIVE' : ''}</h2>
+          <p><strong>ID:</strong> ${p.id}</p>
+          <p><strong>Type:</strong> ${p.type}</p>
+          <p><strong>Enabled:</strong> <span class="${p.enabled ? 'enabled' : 'disabled'}">${p.enabled ? 'YES ✓' : 'NO ✗'}</span></p>
+          <p><strong>Is Active:</strong> <span class="${p.isActive ? 'enabled' : 'disabled'}">${p.isActive ? 'YES ✓' : 'NO ✗'}</span></p>
+          <p><strong>Use API Key:</strong> ${p.config?.useApiKey ? 'YES' : 'NO'}</p>
+          <p><strong>Link URL:</strong> ${p.config?.linkUrl || 'Not set'}</p>
+          <p><strong>API Key:</strong> ${p.config?.apiKey ? '✓ Set (' + p.config.apiKey.substring(0, 16) + '...)' : 'Not set'}</p>
+          <p><strong>Number of Tasks:</strong> ${p.config?.numberOfTasks || 'N/A'}</p>
+          <pre>${JSON.stringify(p.config, null, 2)}</pre>
+        </div>
+      `).join('')}
+      <hr>
+      <p><a href="/admin?pass=admin123&page=monetization" style="color: #0ff;">Go to Monetization Admin →</a></p>
+    </body>
+    </html>
+  `);
+});
 
 // ===================== MONETIZATION CALLBACKS =====================
 
