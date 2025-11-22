@@ -1130,7 +1130,7 @@ async function renderMonetizationPage(pass) {
             <h3 class="font-semibold text-blue-300 mb-2">Integration Status</h3>
             <ul class="text-sm text-slate-300 space-y-1">
               <li>• <strong class="text-emerald-300">Work.ink:</strong> ✅ Fully tested and working</li>
-              <li>• <strong class="text-amber-300">Lootlabs:</strong> ⚠️ Requires API documentation</li>
+              <li>• <strong class="text-emerald-300">Lootlabs:</strong> ✅ Fully integrated with API + Anti-Bypass</li>
               <li>• <strong class="text-amber-300">Linkvertise:</strong> ⚠️ Requires API documentation</li>
               <li class="pt-2 text-xs text-slate-400">→ Only ONE provider can be active at a time</li>
             </ul>
@@ -1288,9 +1288,9 @@ async function renderMonetizationPage(pass) {
               <!-- Link Mode Fields -->
               <div id="link-mode-fields" class="\${provider.config?.useApiKey ? 'hidden' : ''}">
                 <div>
-                  <label class="block text-sm font-medium mb-2">Lootlabs Link URL</label>
-                  <input name="linkUrl" value="\${provider.config?.linkUrl || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm" placeholder="https://loot-link.com/s?...">
-                  <p class="text-xs text-slate-400 mt-1">Your Lootlabs gateway link</p>
+                  <label class="block text-sm font-medium mb-2">Lootlabs Base Link</label>
+                  <input name="linkUrl" value="\${provider.config?.linkUrl || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm" placeholder="https://loot-link.com/s?qo0f">
+                  <p class="text-xs text-slate-400 mt-1">Create ONE link in Lootlabs panel and paste here</p>
                 </div>
               </div>
 
@@ -1298,24 +1298,38 @@ async function renderMonetizationPage(pass) {
               <div id="api-mode-fields" class="\${!provider.config?.useApiKey ? 'hidden' : ''}">
                 <div>
                   <label class="block text-sm font-medium mb-2">Lootlabs API Key</label>
-                  <input name="apiKey" type="password" value="\${provider.config?.apiKey || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm font-mono" placeholder="Your Lootlabs API key">
+                  <input name="apiKey" type="password" value="\${provider.config?.apiKey || ''}" class="w-full glass rounded-lg px-4 py-2.5 text-sm font-mono" placeholder="Your Lootlabs API key (64 char hex)">
                   <p class="text-xs text-slate-400 mt-2">
-                    ✨ <strong>API Benefits:</strong> Direct validation, auto-link generation, advanced features
+                    ✨ <strong>API Benefits:</strong> Anti-Bypass protection, dynamic redirects, better security
+                  </p>
+                  <p class="text-xs text-emerald-400 mt-1">
+                    ℹ️ Get API key from Lootlabs Creator Panel → API section
                   </p>
                 </div>
               </div>
 
               <input type="hidden" name="useApiKey" id="useApiKeyHidden" value="\${provider.config?.useApiKey ? 'on' : 'off'}">
 
-              <div>
-                <label class="block text-sm font-medium mb-2">Key Duration (hours)</label>
-                <input name="keyDuration" type="number" min="1" max="168" value="\${provider.config?.keyDuration || 1}" required class="w-full glass rounded-lg px-4 py-2.5 text-sm">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium mb-2">Number of Tasks</label>
+                  <input name="numberOfTasks" type="number" min="1" max="5" value="\${provider.config?.numberOfTasks || 3}" required class="w-full glass rounded-lg px-4 py-2.5 text-sm">
+                  <p class="text-xs text-slate-400 mt-1">1-5 ads per session</p>
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-medium mb-2">Key Duration (hours)</label>
+                  <input name="keyDuration" type="number" min="1" max="168" value="\${provider.config?.keyDuration || 1}" required class="w-full glass rounded-lg px-4 py-2.5 text-sm">
+                </div>
               </div>
               
               <div class="p-3 glass rounded-lg bg-blue-500/5 border border-blue-500/20">
                 <p class="text-xs text-slate-400">
-                  <strong>Callback URL (set in Lootlabs):</strong><br>
+                  <strong>Callback URL (automatically configured):</strong><br>
                   <code class="text-blue-300">\${provider.config?.returnUrl || ''}</code>
+                </p>
+                <p class="text-xs text-emerald-400 mt-2">
+                  ✨ When using API mode, callback URL is set automatically when creating the link!
                 </p>
               </div>
             </div>
@@ -2876,6 +2890,71 @@ async function sendWebhook(eventName, data) {
   }
 }
 
+// ===================== LOOTLABS API =====================
+async function createLootlabsLink(provider) {
+  try {
+    const apiKey = provider.config?.apiKey;
+    const baseLink = provider.config?.linkUrl; // Static Lootlabs link (e.g., https://loot-link.com/s?qo0f)
+    
+    if (!apiKey || !baseLink) {
+      console.error('Lootlabs: Missing API key or base link');
+      return baseLink || ''; // Fallback to static link
+    }
+    
+    // Generate unique session token for this user
+    const sessionToken = crypto.randomBytes(16).toString('hex');
+    
+    // Prepare returnUrl with session token
+    const returnUrl = `${BASE_URL}/monetization-callback/lootlabs?session=${sessionToken}`;
+    
+    // Encrypt the returnUrl using Lootlabs API
+    const encryptResponse = await fetch('https://creators.lootlabs.gg/api/public/url_encryptor', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        destination_url: returnUrl,
+        api_token: apiKey
+      })
+    });
+    
+    if (!encryptResponse.ok) {
+      const errorText = await encryptResponse.text();
+      console.error('Lootlabs encrypt error:', encryptResponse.status, errorText);
+      return baseLink; // Fallback to static link without encryption
+    }
+    
+    const encryptResult = await encryptResponse.json();
+    
+    if ((encryptResult.type === 'created' || encryptResult.type === 'fetched') && encryptResult.message) {
+      const encryptedUrl = encryptResult.message;
+      
+      // Store session token temporarily (expires in 1 hour)
+      await trafficCollection.insertOne({
+        type: 'lootlabs_session',
+        sessionToken,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+        used: false
+      });
+      
+      // Combine base link with encrypted data parameter
+      const finalLink = `${baseLink}&data=${encryptedUrl}`;
+      
+      console.log('✅ Lootlabs Anti-Bypass link created with session:', sessionToken);
+      return finalLink;
+    } else {
+      console.error('Lootlabs: Unexpected encryption response:', encryptResult);
+      return baseLink;
+    }
+  } catch (error) {
+    console.error('Lootlabs createLink error:', error);
+    return provider.config?.linkUrl || ''; // Fallback to static link
+  }
+}
+
 // ===================== GEOLOCATION =====================
 async function getGeoLocation(ip) {
   // Skip local IPs
@@ -3476,7 +3555,17 @@ function renderGroupCheckpointStep(step, currentStep, totalSteps) {
 
 async function renderWorkinkStep() {
   const activeProvider = await monetizationProvidersCollection.findOne({ isActive: true });
-  const providerLink = activeProvider?.config?.linkUrl || WORKINK_LINK;
+  
+  // Generate monetization link (dynamic or static)
+  let providerLink;
+  if (activeProvider?.type === 'lootlabs' && activeProvider?.config?.useApiKey && activeProvider?.config?.apiKey) {
+    // Dynamically create Lootlabs link via API
+    providerLink = await createLootlabsLink(activeProvider);
+  } else {
+    // Use static link from config
+    providerLink = activeProvider?.config?.linkUrl || WORKINK_LINK;
+  }
+  
   const providerName = activeProvider?.name || "Monetization";
   
   return `
@@ -3607,44 +3696,82 @@ app.get("/monetization-callback/:providerId", async (req, res) => {
       res.setHeader("Set-Cookie", `monetization_token=${encodeURIComponent(token)}; Path=/; Max-Age=3600`);
       
     } else if (providerId === "lootlabs") {
-      const { token, userId } = req.query;
-      if (!token) return res.status(400).send("No token");
-
-      // Check if key already exists
-      const existingKey = await keysCollection.findOne({ fromMonetizationToken: token });
-      if (existingKey) {
-        return renderKeyPage(res, existingKey.key, existingKey);
+      const { session, token, userId } = req.query;
+      
+      // Check if using API key mode (session-based validation)
+      if (provider.config?.useApiKey && session) {
+        // Validate session token
+        const sessionData = await trafficCollection.findOne({
+          type: 'lootlabs_session',
+          sessionToken: session,
+          used: false,
+          expiresAt: { $gt: new Date() }
+        });
+        
+        if (!sessionData) {
+          return res.status(400).send("Invalid or expired session");
+        }
+        
+        // Mark session as used
+        await trafficCollection.updateOne(
+          { _id: sessionData._id },
+          { $set: { used: true, usedAt: new Date() } }
+        );
+        
+        // Check if key already exists for this session
+        const existingKey = await keysCollection.findOne({ fromMonetizationToken: session });
+        if (existingKey) {
+          return renderKeyPage(res, existingKey.key, existingKey);
+        }
+        
+        console.log('✅ Lootlabs API: Session validated successfully');
+        
+        key = makeKey();
+        const duration = provider.config?.keyDuration || 1;
+        keyObj = {
+          key,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + duration * 60 * 60 * 1000),
+          isActive: true,
+          usageCount: 0,
+          maxUsage: null,
+          source: providerId,
+          fromMonetizationToken: session,
+          provider: provider.name,
+          hwid: null,
+          robloxUserId: userId || null,
+          robloxUsername: null,
+        };
+        
+      } else {
+        // Static link mode (no API key) - basic validation
+        if (!token) return res.status(400).send("No token");
+        
+        // Check if key already exists
+        const existingKey = await keysCollection.findOne({ fromMonetizationToken: token });
+        if (existingKey) {
+          return renderKeyPage(res, existingKey.key, existingKey);
+        }
+        
+        console.log('⚠️ Lootlabs: Using static link mode (no API validation)');
+        
+        key = makeKey();
+        const duration = provider.config?.keyDuration || 1;
+        keyObj = {
+          key,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + duration * 60 * 60 * 1000),
+          isActive: true,
+          usageCount: 0,
+          maxUsage: null,
+          source: providerId,
+          fromMonetizationToken: token,
+          provider: provider.name,
+          hwid: null,
+          robloxUserId: userId || null,
+          robloxUsername: null,
+        };
       }
-
-      // ⚠️ ТРЕБУЕТ НАСТРОЙКИ: Проверьте документацию Lootlabs
-      // Возможные варианты валидации:
-      // 1. Если есть API ключ и provider.config.useApiKey === true:
-      //    const response = await fetch('https://loot-link.com/api/validate', {
-      //      headers: { 'Authorization': `Bearer ${provider.config.apiKey}` },
-      //      body: JSON.stringify({ token })
-      //    });
-      // 2. Или использовать публичный endpoint если есть
-      // 3. Или просто принимать token как валидный (менее безопасно)
-      
-      // Временно принимаем token (замените на реальную валидацию!)
-      console.log('⚠️ Lootlabs: Token validation not implemented. Check their API docs!');
-      
-      key = makeKey();
-      const duration = provider.config?.keyDuration || 1;
-      keyObj = {
-        key,
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + duration * 60 * 60 * 1000),
-        isActive: true,
-        usageCount: 0,
-        maxUsage: null,
-        source: providerId,
-        fromMonetizationToken: token,
-        provider: provider.name,
-        hwid: null,
-        robloxUserId: userId || null,
-        robloxUsername: null,
-      };
       
     } else if (providerId === "linkvertise") {
       const { token, userId, target } = req.query;
