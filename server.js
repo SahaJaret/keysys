@@ -145,17 +145,18 @@ async function connectDB() {
           },
           createdAt: new Date()
         },
-        {
+          {
           id: "lootlabs",
           name: "Lootlabs",
           type: "lootlabs",
-          enabled: false,
+          enabled: true,
           isActive: false,
           config: {
-            linkUrl: "",
+            linkUrl: "https://lootdest.org/s?T3HRbRrx",
             returnUrl: BASE_URL + "/monetization-callback/lootlabs",
-            apiKey: "",
-            useApiKey: false,
+            apiKey: "adc3b9b30273bb575eb20a8e1712e9661dde33b08b4c74a2aff12f235ad067ea",
+            useApiKey: true,
+            numberOfTasks: 3,
             keyDuration: 1
           },
           stats: {
