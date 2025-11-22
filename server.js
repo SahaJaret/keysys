@@ -4065,7 +4065,42 @@ app.get("/monetization-callback/:providerId", async (req, res) => {
         console.log('✅ Work.ink session validated:', session);
       }
       
-      if (!token) return res.status(400).send("No token");
+      // If using API mode with session but no token, create key based on session validation
+      if (provider.config?.useApiKey && session && !token) {
+        // Session already validated above, create key directly
+        console.log('✅ Work.ink: Creating key from validated session (no token from Work.ink)');
+        key = makeKey();
+        const duration = provider.config?.keyDuration || 1;
+        keyObj = {
+          key,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + duration * 60 * 60 * 1000),
+          isActive: true,
+          usageCount: 0,
+          maxUsage: null,
+          source: providerId,
+          fromMonetizationToken: session, // Use session as token identifier
+          provider: provider.name,
+          hwid: null,
+          robloxUserId: null,
+          robloxUsername: null,
+        };
+        
+        await keysCollection.insertOne(keyObj);
+        await addEvent("created", key);
+        await sendWebhook("Key created (Work.ink API)", {
+          key,
+          provider: provider.name,
+          expiresAt: keyObj.expiresAt.toISOString(),
+        });
+        
+        res.setHeader("Set-Cookie", `monetization_token=${encodeURIComponent(session)}; Path=/; Max-Age=3600`);
+        return renderKeyPage(res, key, keyObj);
+      }
+      
+      if (!token) {
+        return res.status(400).send("No token. If using API mode, make sure Work.ink is configured to add token to callback URL.");
+      }
 
       // Check if key already exists
       const existingKey = await keysCollection.findOne({ fromMonetizationToken: token });
