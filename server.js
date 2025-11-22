@@ -4484,22 +4484,16 @@ app.post("/admin/scripts/delete", requireAdmin, async (req, res) => {
 app.get("/script/:slug", async (req, res) => {
   const { slug } = req.params;
   
-  // Check if request is from Roblox or browser
+  // Check if request is from browser (block only browsers, allow all executors)
   const userAgent = req.headers['user-agent'] || '';
-  const isRoblox = userAgent.includes('Roblox') || 
-                   userAgent.includes('HttpRequest') ||
-                   userAgent.includes('curl') || // Allow curl for testing
-                   userAgent === ''; // Some executors don't send user-agent
-  
-  // Block browser access
-  const isBrowser = userAgent.includes('Mozilla') || 
+  const isBrowser = userAgent.includes('Mozilla') && (
                     userAgent.includes('Chrome') || 
                     userAgent.includes('Safari') || 
                     userAgent.includes('Edge') || 
                     userAgent.includes('Firefox') ||
-                    userAgent.includes('Opera');
+                    userAgent.includes('Opera'));
   
-  if (isBrowser && !isRoblox) {
+  if (isBrowser) {
     // Return HTML page with access denied message
     return res.status(403).send(`
       <!DOCTYPE html>
