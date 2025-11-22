@@ -9,6 +9,9 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Trust proxy for correct protocol detection (Render, Heroku, etc.)
+app.set('trust proxy', true);
+
 // ===================== CONFIG =====================
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const WORKINK_LINK =
@@ -35,6 +38,26 @@ function getServerUrl() {
   
   // 3. Default to localhost for development
   return "http://localhost:3000";
+}
+
+// Dynamic URL detection based on request
+function getRequestUrl(req) {
+  // If BASE_URL is explicitly set in env, use it
+  if (process.env.BASE_URL) {
+    return process.env.BASE_URL;
+  }
+  
+  // If on Render.com - use environment variable
+  if (process.env.RENDER && process.env.RENDER_EXTERNAL_HOSTNAME) {
+    return `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`;
+  }
+  
+  // Dynamic detection from request headers
+  // req.protocol will be correctly set thanks to 'trust proxy'
+  const protocol = req.protocol || 'http';
+  const host = req.get('host') || req.headers.host || 'localhost:3000';
+  
+  return `${protocol}://${host}`;
 }
 
 const BASE_URL = getServerUrl();
@@ -186,6 +209,29 @@ async function connectDB() {
           createdAt: new Date()
         }
       ]);
+    }
+    
+    // Update Lootlabs provider if it exists but missing config
+    const lootlabsProvider = await monetizationProvidersCollection.findOne({ id: "lootlabs" });
+    if (lootlabsProvider && (!lootlabsProvider.config?.linkUrl || !lootlabsProvider.config?.apiKey || !lootlabsProvider.config?.numberOfTasks)) {
+      console.log("🔧 Updating Lootlabs provider configuration...");
+      await monetizationProvidersCollection.updateOne(
+        { id: "lootlabs" },
+        {
+          $set: {
+            config: {
+              ...lootlabsProvider.config, // Preserve existing config
+              linkUrl: lootlabsProvider.config?.linkUrl || "https://lootdest.org/s?T3HRbRrx",
+              returnUrl: lootlabsProvider.config?.returnUrl || (BASE_URL + "/monetization-callback/lootlabs"),
+              apiKey: lootlabsProvider.config?.apiKey || "adc3b9b30273bb575eb20a8e1712e9661dde33b08b4c74a2aff12f235ad067ea",
+              useApiKey: lootlabsProvider.config?.useApiKey !== undefined ? lootlabsProvider.config.useApiKey : true,
+              numberOfTasks: lootlabsProvider.config?.numberOfTasks || 3,
+              keyDuration: lootlabsProvider.config?.keyDuration || 1
+            }
+          }
+        }
+      );
+      console.log("✅ Lootlabs provider updated!");
     }
   } catch (error) {
     console.error("❌ MongoDB connection error:", error);
@@ -2892,23 +2938,31 @@ async function sendWebhook(eventName, data) {
 }
 
 // ===================== LOOTLABS API =====================
-async function createLootlabsLink(provider) {
+async function createLootlabsLink(provider, req) {
   try {
     const apiKey = provider.config?.apiKey;
     const baseLink = provider.config?.linkUrl; // Static Lootlabs link (e.g., https://loot-link.com/s?qo0f)
     
+    console.log('🔐 createLootlabsLink called');
+    console.log('🔍 API Key present:', !!apiKey, apiKey ? apiKey.substring(0, 16) + '...' : 'NO');
+    console.log('🔍 Base Link:', baseLink);
+    
     if (!apiKey || !baseLink) {
-      console.error('Lootlabs: Missing API key or base link');
+      console.error('❌ Lootlabs: Missing API key or base link', { hasApiKey: !!apiKey, hasBaseLink: !!baseLink });
       return baseLink || ''; // Fallback to static link
     }
     
     // Generate unique session token for this user
     const sessionToken = crypto.randomBytes(16).toString('hex');
+    console.log('🎫 Generated session token:', sessionToken);
     
-    // Prepare returnUrl with session token
-    const returnUrl = `${BASE_URL}/monetization-callback/lootlabs?session=${sessionToken}`;
+    // Prepare returnUrl with session token - use dynamic URL based on request
+    const requestUrl = req ? getRequestUrl(req) : BASE_URL;
+    const returnUrl = `${requestUrl}/monetization-callback/lootlabs?session=${sessionToken}`;
+    console.log('🔗 Return URL (dynamic):', returnUrl);
     
     // Encrypt the returnUrl using Lootlabs API
+    console.log('📡 Calling Lootlabs API...');
     const encryptResponse = await fetch('https://creators.lootlabs.gg/api/public/url_encryptor', {
       method: 'POST',
       headers: {
@@ -2921,13 +2975,16 @@ async function createLootlabsLink(provider) {
       })
     });
     
+    console.log('📡 API Response status:', encryptResponse.status);
+    
     if (!encryptResponse.ok) {
       const errorText = await encryptResponse.text();
-      console.error('Lootlabs encrypt error:', encryptResponse.status, errorText);
+      console.error('❌ Lootlabs encrypt error:', encryptResponse.status, errorText);
       return baseLink; // Fallback to static link without encryption
     }
     
     const encryptResult = await encryptResponse.json();
+    console.log('📦 API Response:', JSON.stringify(encryptResult, null, 2));
     
     if ((encryptResult.type === 'created' || encryptResult.type === 'fetched') && encryptResult.message) {
       const encryptedUrl = encryptResult.message;
@@ -3149,7 +3206,7 @@ app.get("/get-key", async (req, res) => {
     console.log('🔍 Link URL:', activeProvider?.config?.linkUrl);
     console.log('🔍 Use API:', activeProvider?.config?.useApiKey);
     
-    return res.send(await renderWorkinkStep());
+    return res.send(await renderWorkinkStep(req));
   }
   
   // Render current step
@@ -3560,14 +3617,14 @@ function renderGroupCheckpointStep(step, currentStep, totalSteps) {
   `;
 }
 
-async function renderWorkinkStep() {
+async function renderWorkinkStep(req) {
   const activeProvider = await monetizationProvidersCollection.findOne({ isActive: true });
   
   // Generate monetization link (dynamic or static)
   let providerLink;
   if (activeProvider?.type === 'lootlabs' && activeProvider?.config?.useApiKey && activeProvider?.config?.apiKey) {
     // Dynamically create Lootlabs link via API
-    providerLink = await createLootlabsLink(activeProvider);
+    providerLink = await createLootlabsLink(activeProvider, req);
   } else {
     // Use static link from config
     providerLink = activeProvider?.config?.linkUrl || WORKINK_LINK;
@@ -3681,6 +3738,124 @@ app.get("/debug/providers", async (req, res) => {
     </body>
     </html>
   `);
+});
+
+// ===================== TEST PROVIDER REDIRECT =====================
+
+app.get("/test-provider", async (req, res) => {
+  try {
+    const activeProvider = await monetizationProvidersCollection.findOne({ isActive: true });
+    
+    if (!activeProvider) {
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Test Provider - No Active Provider</title>
+          <style>
+            body { font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff; text-align: center; }
+            .error { background: #330000; border: 2px solid #f00; padding: 20px; border-radius: 8px; display: inline-block; }
+            a { color: #0ff; margin-top: 20px; display: block; }
+          </style>
+        </head>
+        <body>
+          <div class="error">
+            <h1>❌ No Active Provider</h1>
+            <p>Please set an active monetization provider in the admin panel.</p>
+            <a href="/admin?pass=admin123&page=monetization">Go to Admin Panel →</a>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    console.log('🧪 Test Provider Redirect:', activeProvider.name);
+    console.log('🔍 Provider config:', JSON.stringify(activeProvider.config, null, 2));
+    
+    // Generate monetization link
+    let providerLink;
+    if (activeProvider.type === 'lootlabs' && activeProvider.config?.useApiKey && activeProvider.config?.apiKey) {
+      console.log('🔗 Generating Lootlabs Anti-Bypass link...');
+      console.log('🔍 Base link:', activeProvider.config?.linkUrl);
+      console.log('🔍 API Key present:', !!activeProvider.config?.apiKey);
+      try {
+        providerLink = await createLootlabsLink(activeProvider, req);
+        console.log('✅ Generated link:', providerLink);
+        console.log('🔍 Link length:', providerLink?.length || 0);
+      } catch (error) {
+        console.error('❌ Error generating link:', error);
+        providerLink = activeProvider.config?.linkUrl || '';
+        console.log('⚠️ Fallback to static link:', providerLink);
+      }
+    } else {
+      providerLink = activeProvider.config?.linkUrl || '';
+      console.log('🔗 Using static link:', providerLink);
+      console.log('🔍 Condition check:', {
+        type: activeProvider.type,
+        useApiKey: activeProvider.config?.useApiKey,
+        hasApiKey: !!activeProvider.config?.apiKey
+      });
+    }
+    
+    if (!providerLink) {
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Test Provider - No Link</title>
+          <style>
+            body { font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff; text-align: center; }
+            .error { background: #330000; border: 2px solid #f00; padding: 20px; border-radius: 8px; display: inline-block; max-width: 600px; }
+            .info { background: #000; padding: 15px; margin: 10px 0; border-radius: 4px; text-align: left; }
+            a { color: #0ff; margin-top: 20px; display: block; }
+            pre { background: #000; padding: 10px; border-radius: 4px; overflow-x: auto; text-align: left; }
+          </style>
+        </head>
+        <body>
+          <div class="error">
+            <h1>❌ No Link Configured</h1>
+            <p><strong>Provider:</strong> ${activeProvider.name} (${activeProvider.type})</p>
+            <div class="info">
+              <p><strong>Link URL:</strong> ${activeProvider.config?.linkUrl || '❌ Not set'}</p>
+              <p><strong>API Key:</strong> ${activeProvider.config?.apiKey ? '✓ Set' : '❌ Not set'}</p>
+              <p><strong>Use API Key:</strong> ${activeProvider.config?.useApiKey ? 'Yes' : 'No'}</p>
+            </div>
+            <p>Please configure the link URL and API key in the admin panel.</p>
+            <a href="/admin?pass=admin123&page=monetization">Go to Admin Panel →</a>
+            <a href="/debug/providers">Debug Providers →</a>
+            <pre>${JSON.stringify(activeProvider.config, null, 2)}</pre>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    // Redirect to the monetization link
+    console.log('🚀 Redirecting to:', providerLink);
+    res.redirect(providerLink);
+    
+  } catch (error) {
+    console.error('❌ Test Provider Error:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Test Provider - Error</title>
+        <style>
+          body { font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff; text-align: center; }
+          .error { background: #330000; border: 2px solid #f00; padding: 20px; border-radius: 8px; display: inline-block; }
+          pre { text-align: left; background: #000; padding: 10px; border-radius: 4px; }
+        </style>
+      </head>
+      <body>
+        <div class="error">
+          <h1>❌ Error</h1>
+          <pre>${error.message}</pre>
+        </div>
+      </body>
+      </html>
+    `);
+  }
 });
 
 // ===================== MONETIZATION CALLBACKS =====================
