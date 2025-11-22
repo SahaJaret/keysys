@@ -1080,6 +1080,9 @@ async function renderMonetizationPage(pass, req) {
           <button onclick="editProvider('${provider.id}')" class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 rounded-lg text-xs font-medium border border-blue-500/20">
             Configure
           </button>
+          <a href="/admin/test-provider/${provider.id}?pass=${pass}" target="_blank" class="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 rounded-lg text-xs font-medium border border-purple-500/20 inline-block">
+            🧪 Test
+          </a>
             </div>
           </div>
 
@@ -3698,6 +3701,123 @@ app.get("/debug/providers", async (req, res) => {
 });
 
 // ===================== TEST PROVIDER REDIRECT =====================
+
+// Test specific provider by ID
+app.get("/admin/test-provider/:providerId", requireAdmin, async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const provider = await monetizationProvidersCollection.findOne({ id: providerId });
+    
+    if (!provider) {
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Test Provider - Not Found</title>
+          <style>
+            body { font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff; text-align: center; }
+            .error { background: #330000; border: 2px solid #f00; padding: 20px; border-radius: 8px; display: inline-block; }
+            a { color: #0ff; margin-top: 20px; display: block; }
+          </style>
+        </head>
+        <body>
+          <div class="error">
+            <h1>❌ Provider Not Found</h1>
+            <p>Provider ID: ${providerId}</p>
+            <a href="/admin?pass=${req.query.pass || 'admin123'}&page=monetization">Go to Admin Panel →</a>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    console.log('🧪 Test Provider:', provider.name, 'Type:', provider.type);
+    
+    // Generate monetization link
+    let providerLink;
+    if (provider.type === 'lootlabs' && provider.config?.useApiKey && provider.config?.apiKey) {
+      console.log('🔗 Generating Lootlabs Anti-Bypass link...');
+      try {
+        providerLink = await createLootlabsLink(provider, req);
+        console.log('✅ Generated link:', providerLink);
+      } catch (error) {
+        console.error('❌ Error generating link:', error);
+        providerLink = provider.config?.linkUrl || '';
+        console.log('⚠️ Fallback to static link:', providerLink);
+      }
+    } else if (provider.type === 'workink' && provider.config?.useApiKey && provider.config?.apiKey) {
+      console.log('🔗 Generating Work.ink link via API...');
+      try {
+        providerLink = await createWorkinkLink(provider, req);
+        console.log('✅ Generated link:', providerLink);
+      } catch (error) {
+        console.error('❌ Error generating link:', error);
+        providerLink = provider.config?.linkUrl || '';
+        console.log('⚠️ Fallback to static link:', providerLink);
+      }
+    } else {
+      providerLink = provider.config?.linkUrl || '';
+      console.log('🔗 Using static link:', providerLink);
+    }
+    
+    if (!providerLink) {
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Test Provider - No Link</title>
+          <style>
+            body { font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff; text-align: center; }
+            .error { background: #330000; border: 2px solid #f00; padding: 20px; border-radius: 8px; display: inline-block; max-width: 600px; }
+            .info { background: #000; padding: 15px; margin: 10px 0; border-radius: 4px; text-align: left; }
+            a { color: #0ff; margin-top: 20px; display: block; }
+            pre { background: #000; padding: 10px; border-radius: 4px; overflow-x: auto; text-align: left; }
+          </style>
+        </head>
+        <body>
+          <div class="error">
+            <h1>❌ No Link Configured</h1>
+            <p><strong>Provider:</strong> ${provider.name} (${provider.type})</p>
+            <div class="info">
+              <p><strong>API Key:</strong> ${provider.config?.apiKey ? '✓ Set' : '❌ Not set'}</p>
+              <p><strong>Use API Key:</strong> ${provider.config?.useApiKey ? 'Yes' : 'No'}</p>
+            </div>
+            <p>Please configure the API key in the admin panel.</p>
+            <a href="/admin?pass=${req.query.pass || 'admin123'}&page=monetization">Go to Admin Panel →</a>
+            <pre>${JSON.stringify(provider.config, null, 2)}</pre>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+    
+    // Redirect to the monetization link
+    console.log('🚀 Redirecting to:', providerLink);
+    res.redirect(providerLink);
+    
+  } catch (error) {
+    console.error('❌ Test Provider Error:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Test Provider - Error</title>
+        <style>
+          body { font-family: monospace; padding: 40px; background: #1a1a1a; color: #fff; text-align: center; }
+          .error { background: #330000; border: 2px solid #f00; padding: 20px; border-radius: 8px; display: inline-block; }
+          pre { text-align: left; background: #000; padding: 10px; border-radius: 4px; }
+        </style>
+      </head>
+      <body>
+        <div class="error">
+          <h1>❌ Error</h1>
+          <pre>${error.message}</pre>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
 
 app.get("/test-provider", async (req, res) => {
   try {
